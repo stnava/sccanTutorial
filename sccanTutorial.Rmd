@@ -1,0 +1,15 @@
+---
+title: "SCCAN tutorial and tests"
+output: pdf_document
+---
+
+# Objective
+Compare results of your local ANTs processing to a set of reference results
+```{r fig.width=8, fig.height=4, echo=FALSE}
+library(ANTsR)
+ptrainimg<-as.matrix(antsImageRead("sccanTutorial/data/pbac_train_img.mha",2))
+ptestimg<-as.matrix(antsImageRead("sccanTutorial/data/pbac_test_img.mha",2))
+mask<-antsImageRead("sccanTutorial/data/gmask.nii.gz",3)
+ptraincog<-read.csv("sccanTutorial/data/pbac_train_cog.csv")
+ptestcog<-read.csv("sccanTutorial/data/pbac_test_cog.csv")
+```
