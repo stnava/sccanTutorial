@@ -7,11 +7,28 @@ library(knitr)
 opts_knit$set(root.dir="/Users/stnava/code")
 ```
 
+# Introduction
 
-# Read some data
+## Brief summary
+Sparse canonical correlation analysis for neuroimaging (SCCAN) is a general purpose
+tool for "two-sided" multiple regression.  This allows one to symmetrically
+compare one matrix of data to another and find linear relationships between
+them in a low-dimensional space.  SCCAN derives from classic canonical correlation
+analysis and also relates to singular value decomposition.  To handle data with $p>>n$,
+SCCAN uses high-dimensional regularization methods common in $\ell_1$ regression
+and spatial regularization to help ensure the biological plausibility of statistical
+maps in medical imaging.  This problem is a difficult optimization ($np$-hard)
+and, to improve solution interpetability and stability, SCCAN allows one to
+to use prior knowledge to constrain the solution space.
+
+# Examples
+
+Perhaps the best way to understand how to use SCCAN is by running example data.
+
+## Read example data
 Compare results of your local ANTs processing to a set of reference results
-```{r fig.width=8, fig.height=4, echo=FALSE}
-library(ANTsR)
+```{r fig.width=8, fig.height=4, echo=FALSE, messages=FALSE }
+suppressMessages(library(ANTsR))
 ptrainimg<-as.matrix(antsImageRead("sccanTutorial/data/pbac_train_img.mha",2))
 ptestimg<-as.matrix(antsImageRead("sccanTutorial/data/pbac_test_img.mha",2))
 mask<-antsImageRead("sccanTutorial/data/gmask.nii.gz",3)
