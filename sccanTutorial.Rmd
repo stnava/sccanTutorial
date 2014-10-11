@@ -26,7 +26,7 @@ to use prior knowledge to constrain the solution space.
 Perhaps the best way to understand how to use SCCAN is by running example data.
 
 ## Read example data
-Compare results of your local ANTs processing to a set of reference results
+We read in some neuroimaging and cognitive data below.
 ```{r fig.width=8, fig.height=4, echo=FALSE, messages=FALSE }
 suppressMessages(library(ANTsR))
 ptrainimg<-as.matrix(antsImageRead("sccanTutorial/data/pbac_train_img.mha",2))
