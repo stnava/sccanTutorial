@@ -2,14 +2,23 @@
 title: "SCCAN tutorial and tests"
 output: pdf_document
 ---
+```{r global options, include=FALSE}
+library(knitr)
+opts_knit$set(root.dir="/Users/stnava/code")
+```
 
-# Objective
+
+# Read some data
 Compare results of your local ANTs processing to a set of reference results
 ```{r fig.width=8, fig.height=4, echo=FALSE}
 library(ANTsR)
 ptrainimg<-as.matrix(antsImageRead("sccanTutorial/data/pbac_train_img.mha",2))
 ptestimg<-as.matrix(antsImageRead("sccanTutorial/data/pbac_test_img.mha",2))
 mask<-antsImageRead("sccanTutorial/data/gmask.nii.gz",3)
-ptraincog<-read.csv("sccanTutorial/data/pbac_train_cog.csv")
-ptestcog<-read.csv("sccanTutorial/data/pbac_test_cog.csv")
+f1<-list.files(path = "./sccanTutorial", pattern = "pbac_train_cog.csv",
+  recursive=TRUE, full.names = TRUE, include.dirs=TRUE )
+f2<-list.files(path = "./sccanTutorial", pattern = "pbac_test_cog.csv",
+  recursive=TRUE, full.names = TRUE )
+ptraincog<-read.csv(f1)
+ptestcog<-read.csv(f2)
 ```
