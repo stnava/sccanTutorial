@@ -302,7 +302,7 @@ render<-T
 for ( bestpred in 1:nrow(ccamat)) {
   battpred<-ptrainimg %*% t(ccamat)
   colnames(battpred)<-paste("GM",c(1:ncol(battpred)),sep='')
-  cogpred<-( cogmat %*% data.matrix( batt$eig2 ) )[,bestpred]
+  cogpred<-( rcogmat %*% data.matrix( batt$eig2 ) )[,bestpred]
   mydf<-data.frame( cogpred, battpred )
   myform<-as.formula( paste("cogpred~",gvars,sep='') )
   mdltrain<-lm( myform, data=mydf )
@@ -355,7 +355,7 @@ for ( i in 1:ncol(ptestcog) ) {
  qv[i]<-cor.test(data.matrix(ptestcog)[,i],predictedBattery[,i])$p.value
 }
 qv[ is.na(qv) ]<-1
-qv<-p.adjust(pv,method='BH')
+qv<-p.adjust(qv,method='BH')
 ```
 
 The following univariate columns may be predicted 
