@@ -112,8 +112,11 @@ for ( i in 1:length(labels) ) {
   initmat[i,]<-vec
 }
 ccainit<-initializeEigenanatomy( initmat, mask )
-for ( pw in c(30,15,05) ) {
-langresult<-sparseDecom2( inmatrix=list(ptrainimg,langmat), its=12, mycoption=1,
+pwsearch<-c(30,15,05)
+langfn<-rep("",length(pwsearch))
+ct<-1
+for ( pw in pwsearch ) {
+langresult<-sparseDecom2( inmatrix=list(ptrainimg,langmat), its=6, mycoption=1,
   sparseness=c(sp,-0.3), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(5,0), 
   initializationList=ccainit$initlist, priorWeight=pw/100, smooth=0.5, ell1=-10 )
 ccamat<-imageListToMatrix( langresult$eig1, mask )
@@ -138,13 +141,16 @@ for ( x in langresult$eig1 ) {
   print(paste(max(x),min(x)))
 }
 mycolors<-c("red","green","blue","yellow")
-langfn<-paste(rootdir,'/figures/langSCCANRegression',pw,'.jpg',sep='')
+langfn[ct]<-paste(rootdir,'/figures/langSCCANRegression',pw,'.jpg',sep='')
 plotANTsImage( mask, functional=langresult$eig1, threshold='0.25x1',
-  slices="12x50x1",color=mycolors,outname=ofn )
+  slices="12x50x1",color=mycolors,outname=langfn[ct] )
+ct<-ct+1
 }
 ```
 
-![](`r langfn`)
+![](`r langfn[1]`)
+![](`r langfn[2]`)
+![](`r langfn[3]`)
 
 ## Sparse regression with nuisance variables
 
