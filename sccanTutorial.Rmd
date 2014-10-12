@@ -66,7 +66,7 @@ the solution.  We will also compare the results in training with that
 in testing as a function of spareseness.
 ```{r sparreg,fig.width=8, fig.height=4, echo=TRUE, messages=FALSE }
 agemat<-matrix( ptraincog$age, ncol=1)
-paramsearch<-c(1:3)/(-100.0)
+paramsearch<-c(1:10)/(-100.0)
 paramsearchcorrs<-rep(0,length(paramsearch))
 paramsearchpreds<-rep(0,length(paramsearch))
 ct<-1
@@ -112,9 +112,10 @@ for ( i in 1:length(labels) ) {
   initmat[i,]<-vec
 }
 ccainit<-initializeEigenanatomy( initmat, mask )
+for ( pw in c(30,15,05) ) {
 langresult<-sparseDecom2( inmatrix=list(ptrainimg,langmat), its=12, mycoption=1,
   sparseness=c(sp,-0.3), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(5,0), 
-  initializationList=ccainit$initlist, priorWeight=0.3, smooth=0.5, ell1=10 )
+  initializationList=ccainit$initlist, priorWeight=pw/100, smooth=0.5, ell1=-10 )
 ccamat<-imageListToMatrix( langresult$eig1, mask )
 langpred<-ptrainimg %*% t(ccamat)
 colnames(langpred)<-paste("GM",c(1:ncol(langpred)),sep='')
@@ -137,9 +138,10 @@ for ( x in langresult$eig1 ) {
   print(paste(max(x),min(x)))
 }
 mycolors<-c("red","green","blue","yellow")
-langfn<-paste(rootdir,'/figures/langSCCANRegression.jpg',sep='')
+langfn<-paste(rootdir,'/figures/langSCCANRegression',pw,'.jpg',sep='')
 plotANTsImage( mask, functional=langresult$eig1, threshold='0.25x1',
   slices="12x50x1",color=mycolors,outname=ofn )
+}
 ```
 
 ![](`r langfn`)
