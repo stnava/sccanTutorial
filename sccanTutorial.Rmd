@@ -286,6 +286,7 @@ Try to predict all the demographic variability from the imaging data.
 We use `mycoption 0` to try to reduce correlation in low-dimensional 
 space.  This enforces a new SCCAN constraint (not previously reported).
 ```{r fullpred, fig.width=8, fig.height=4, echo=TRUE, messages=FALSE }
+cogmat<-data.matrix(ptraincog)
 rcogmat<-residuals( lm( data.matrix(ptraincog) ~ ptraincog$mmse + ptraincog$age ) )
 rptrainimg<-residuals( lm( ptrainimg ~ ptraincog$mmse ) )
 batt<-sparseDecom2( inmatrix=list(rptrainimg,rcogmat), its=15, 
