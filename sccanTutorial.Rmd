@@ -6,6 +6,8 @@ output: pdf_document
 library( knitr )
 library( randomForest )
 library( visreg )
+library(pheatmap)
+library(png)
 invisible(suppressMessages(library(ANTsR)))
 rootdir<-"/Users/stnava/code/sccanTutorial"
 if ( ! file.exists(rootdir) ) {
@@ -98,6 +100,7 @@ We initialize with left hemisphere regions.
 langmat<-cbind(  ptraincog$speech_adj, ptraincog$writing_adj, 
                  ptraincog$semantic_adj, ptraincog$reading_adj,
                  ptraincog$naming_adj )
+colnames(langmat)<-c("speech","writing","semantic","reading","naming")
 langmat2<-cbind( ptestcog$speech_adj, ptestcog$writing_adj, 
                  ptestcog$semantic_adj, ptestcog$reading_adj,
                  ptestcog$naming_adj )
@@ -112,38 +115,49 @@ for ( i in 1:length(labels) ) {
   initmat[i,]<-vec
 }
 ccainit<-initializeEigenanatomy( initmat, mask )
-pwsearch<-c(30,15,05)
+pwsearch<-c(40,20,10)
 langfn<-rep("",length(pwsearch))
+langfn2<-rep("",length(pwsearch))
 ct<-1
 for ( pw in pwsearch ) {
 langresult<-sparseDecom2( inmatrix=list(ptrainimg,langmat), its=6, mycoption=1,
-  sparseness=c(sp,-0.3), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(5,0), 
+  sparseness=c(sp,-0.9), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(50,0), 
   initializationList=ccainit$initlist, priorWeight=pw/100, smooth=0.5, ell1=-10 )
 ccamat<-imageListToMatrix( langresult$eig1, mask )
 langpred<-ptrainimg %*% t(ccamat)
 colnames(langpred)<-paste("GM",c(1:ncol(langpred)),sep='')
 cogpred<-langmat %*% data.matrix( langresult$eig2 )
 mydf<-data.frame( cogpred, langpred )
-myform<-as.formula( "Variate001~GM1+GM2+GM3+GM4" )
+myform<-as.formula( "Variate000~GM1+GM2+GM3+GM4" )
 mdltrain<-lm( myform, data=mydf )
 langpred<-ptestimg %*% t(ccamat)
 colnames(langpred)<-paste("GM",c(1:ncol(langpred)),sep='')
 cogpred<-langmat2 %*% data.matrix( langresult$eig2 )
 mydf<-data.frame( cogpred, langpred )
-print(cor.test( mydf$Variate001 ,predict(mdltrain,newdata=mydf)))
+print(cor.test( mydf$Variate000 ,predict(mdltrain,newdata=mydf)))
 for ( i in 1:length(labels) )
   print( paste( "Dice: ",aal$label_name[labels[i]],
          sum( abs(ccamat[i,]) > 0 & initmat[i,] > 0 ) /
          sum( abs(ccamat[i,]) > 0 | initmat[i,] > 0 ) ) )
 for ( x in langresult$eig1 ) {
-  ImageMath(3,x,"abs",x)
-  ImageMath(3,x,"Normalize",x)
-  print(paste(max(x),min(x)))
+  x[ mask == 1 ]<-abs( x[ mask == 1 ] )
+  x[ mask == 1 ]<-x[ mask == 1 ]/max( x[ mask == 1 ] )
 }
 mycolors<-c("red","green","blue","yellow")
 langfn[ct]<-paste(rootdir,'/figures/langSCCANRegression',pw,'.jpg',sep='')
-plotANTsImage( mask, functional=langresult$eig1, threshold='0.25x1',
+langfn2[ct]<-paste(rootdir,'/figures/langSCCANRegression',pw,'.png',sep='')
+plotANTsImage( mask, functional=(langresult$eig1), threshold='0.25x1',
   slices="12x50x1",color=mycolors,outname=langfn[ct] )
+# cnt<-getCentroids( ntwkimage, clustparam = 100 )
+brain<-renderSurfaceFunction( surfimg =list( aalimg ) , alphasurf=0.1 ,
+  funcimg=langresult$eig1, smoothsval = 1.5, mycol=mycolors )
+id<-par3d("userMatrix")
+rid<-rotate3d( id , -pi/2, 1, 0, 0 )
+rid2<-rotate3d( id , pi/2, 0, 0, 1 )
+rid3<-rotate3d( id , -pi/2, 0, 0, 1 )
+par3d(userMatrix = id ) 
+dd<-make3ViewPNG(  rid, id, rid2, paste(rootdir,'/figures/langSCCANRegression',pw,sep='') )
+par3d(userMatrix = id ) 
 ct<-ct+1
 }
 ```
@@ -151,15 +165,77 @@ Strong prior
 
 ![Strong prior](`r langfn[1]`)
 
+![Strong prior 3D](`r langfn2[1]`)
+
 Medium prior
 
 ![Medium prior](`r langfn[2]`)
+
+![Medium prior 3D](`r langfn2[2]`)
 
 Weak prior
 
 ![Weak prior](`r langfn[3]`)
 
+![Weak prior 3D](`r langfn2[3]`)
+
+## Identifying the anatomical network
+
+The best results are initialized by the prior but, in the end, 
+drift away from that initialization.  Where in the brain do the solution 
+vectors end up?
+
+
+```{r aallabel}
+ccaanat<-list()
+for ( img in langresult$eig1 ) {
+  nzind<-img[ mask == 1 ] > 0 
+  aalvals<-aalimg[ mask == 1 ][ nzind ]
+  ccaanat<-lappend( ccaanat, aalvals )
+}
+ccaanat<-unlist( ccaanat )
+anatcount<-hist(ccaanat,breaks=0:100)$count
+anatcount[ anatcount < 0.8*max(anatcount) ]<-0
+anatcount<-which( anatcount > 0 )
+ccaaal<-aal$label_name[anatcount]
+```
+The SCCAN predictors include: `r ccaaal`.
+
+How much of the known network do we actually find?
+
+
+## Associating classes to SCCAN predictors
+
+Recalling: CCA maximizes $PearsonCorrelation( XW^T, ZY^T )$, 
+we can study matrix $Y$ which contrasts or combines columns of the cognition/design matrix.
+
+```{r sccanpredictorclass}
+rownames(langresult$eig2)<-colnames(langmat)
+temp<-(langresult$eig2)
+temp[ abs(langresult$eig2) < 0.03 ]<-0
+```
+
+```{r sccanpredictorclass2}
+pheatmap(temp)
+```
+
+
 ## Sparse regression with nuisance variables
 
-## Bidirectional regression with nuisance variables
+Often, we want to control for the presence of nuisance variables.
+As usual, there are several options:  (1) control after you do 
+dimensionality reduction;  (2) orthogonalize the predictors; 
+(3) FIXME ...
 
+
+## Predicting the full cognitive battery from the neuroimaging data
+
+Can the neuroimaging data predict the full cognitive battery?
+
+```{r mvarpred,fig.width=8, fig.height=4, echo=TRUE, messages=FALSE }
+# use cca to transform cortical signal to the cognitive battery 
+predictedBattery<-data.frame( vox=ptrainimg %*% t(ccamat) %*% t(langresult$eig2) )
+print(cor(langmat,predictedBattery))
+predictedBattery<-data.frame( vox=ptestimg %*% t(ccamat) %*% t(langresult$eig2) )
+print(cor(langmat2,predictedBattery))
+```
