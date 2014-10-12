@@ -376,7 +376,6 @@ predictedBattery<-data.frame( vox=ptestimg %*% t(ccamat) %*% t(batt$eig2) )
 print(diag(cor(data.matrix(ptestcog),predictedBattery)))
 qv<-rep(NA,ncol(ptestcog) )
 for ( i in 1:ncol(ptestcog) ) {
- print(colnames(ptestcog)[i])
  qv[i]<-cor.test(data.matrix(ptestcog)[,i],predictedBattery[,i])$p.value
 }
 qv[ is.na(qv) ]<-1
