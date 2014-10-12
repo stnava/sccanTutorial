@@ -3,10 +3,11 @@ title: "SCCAN tutorial and tests"
 output: pdf_document
 ---
 ```{r global options, include=FALSE,echo=TRUE}
-library(knitr)
-library(visreg)
+library( knitr )
+library( randomForest )
+library( visreg )
 invisible(suppressMessages(library(ANTsR)))
-rootdir<-"/Users/stnava2/code/sccanTutorial"
+rootdir<-"/Users/stnava/code/sccanTutorial"
 if ( ! file.exists(rootdir) ) {
   dirs<-list.dirs(path = path.expand("~"), full.names = TRUE, recursive = TRUE)
   rootdir<-dirs[ grep('sccanTutorial',dirs)[1] ]
@@ -35,7 +36,8 @@ Perhaps the best way to understand how to use SCCAN is by running example data.
 
 ## Read example data
 We read in some neuroimaging and cognitive data below.
-```{r fig.width=8, fig.height=4, echo=TRUE, messages=FALSE }
+```{r readata,fig.width=8, fig.height=4, echo=TRUE, messages=FALSE }
+data(aal,package='ANTsR')
 gfnl<-list.files(path=rootdir, pattern = glob2rx("pbac*mha"),
   full.names = T,recursive = T) 
 ptrainimg<-as.matrix(antsImageRead(gfnl[2],2))
@@ -43,6 +45,9 @@ ptestimg<-as.matrix(antsImageRead(gfnl[1],2))
 gfnl<-list.files(path=rootdir, pattern = "gmask.nii.gz",
   full.names = T,recursive = T) 
 mask<-antsImageRead( gfnl[1], 3 )
+afnl<-list.files(path=rootdir, pattern = "aal.nii.gz",
+  full.names = T,recursive = T) 
+aalimg<-antsImageRead( afnl[1], 3 )
 f1<-list.files(path =rootdir, pattern = "pbac_train_cog.csv",
   recursive=TRUE, full.names = TRUE, include.dirs=TRUE )
 f2<-list.files(path = rootdir, pattern = "pbac_test_cog.csv",
@@ -55,25 +60,89 @@ one for training.
 
 ## Sparse regression
 
-Use sccan to find brain regions relating to age.  We impose a 
-"cluster threshold" regularization to prevent isolated voxels
-from appearing in the solution.
+Use sccan to find brain regions relating to age.  We impose a "cluster
+threshold" regularization to prevent isolated voxels from appearing in
+the solution.  We will also compare the results in training with that
+in testing as a function of spareseness.
 ```{r sparreg,fig.width=8, fig.height=4, echo=TRUE, messages=FALSE }
 agemat<-matrix( ptraincog$age, ncol=1)
-for ( sp in c(-0.01,-0.05,-0.1,-0.15,-0.2) ) {
-  ageresult<-sparseDecom2( inmatrix=list(ptrainimg,agemat), its=10, mycoption=2,
+paramsearch<-c(1:3)/(-100.0)
+paramsearchcorrs<-rep(0,length(paramsearch))
+paramsearchpreds<-rep(0,length(paramsearch))
+ct<-1
+for ( sp in paramsearch ) {
+  ageresult<-sparseDecom2( inmatrix=list(ptrainimg,agemat), its=8, mycoption=1,
     sparseness=c(sp,0.9), inmask=c(mask,NA),nvecs=2, cthresh=c(50,0))
-  plot( ageresult$projections[,1], ageresult$projections2[,1] )
   # convert output images to matrix so we can validate in test data
   ccamat<-imageListToMatrix( ageresult$eig1, mask )
+  agepred<-ptrainimg %*% t(ccamat)
+  paramsearchcorrs[ct]<-cor( agepred[,1],  ptraincog$age )
   agepred<-ptestimg %*% t(ccamat)
-  print(cor.test( agepred[,1],  ptestcog$age ))
+  paramsearchpreds[ct]<-cor( agepred[,1],  ptestcog$age )
+  ct<-ct+1
   }
+mydf<-data.frame( sparseness=paramsearch, trainCorrs=paramsearchcorrs, 
+  testCorrs=paramsearchpreds )
+mdl1<-lm( trainCorrs ~ stats::poly(sparseness,1), data=mydf ) 
+mdl2<-lm( testCorrs ~ stats::poly(sparseness,1) , data=mydf ) 
+visreg(mdl1)
+visreg(mdl2)
 ```
 
-## Sparse regression with prior initialization
+## SCCAN with prior initialization
 
-Use sccan to find brain regions relating to age.
+Use SCCAN to find brain regions relating to language.
+We initialize with left hemisphere regions.
+
+```{r sparreginit,fig.width=8, fig.height=4, echo=TRUE, messages=FALSE }
+langmat<-cbind(  ptraincog$speech_adj, ptraincog$writing_adj, 
+                 ptraincog$semantic_adj, ptraincog$reading_adj,
+                 ptraincog$naming_adj )
+langmat2<-cbind( ptestcog$speech_adj, ptestcog$writing_adj, 
+                 ptestcog$semantic_adj, ptestcog$reading_adj,
+                 ptestcog$naming_adj )
+# langmat<-residuals(lm(langmat~ptraincog$mmse+ptraincog$age))
+labels<-c(13,81,39,79)
+print(aal$label_name[labels])
+initmat<-matrix( rep(0,sum(mask==1)*length(labels)), nrow=length(labels) )
+# fill the matrix with the aal region locations
+for ( i in 1:length(labels) ) {
+  vec<-( aalimg[ mask == 1 ] == labels[i] )
+  vec[ vec > 0]<-vec[ vec > 0]+rnorm(sum(vec>0))*0.5
+  initmat[i,]<-vec
+}
+ccainit<-initializeEigenanatomy( initmat, mask )
+langresult<-sparseDecom2( inmatrix=list(ptrainimg,langmat), its=12, mycoption=1,
+  sparseness=c(sp,-0.3), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(5,0), 
+  initializationList=ccainit$initlist, priorWeight=0.3, smooth=0.5, ell1=10 )
+ccamat<-imageListToMatrix( langresult$eig1, mask )
+langpred<-ptrainimg %*% t(ccamat)
+colnames(langpred)<-paste("GM",c(1:ncol(langpred)),sep='')
+cogpred<-langmat %*% data.matrix( langresult$eig2 )
+mydf<-data.frame( cogpred, langpred )
+myform<-as.formula( "Variate001~GM1+GM2+GM3+GM4" )
+mdltrain<-lm( myform, data=mydf )
+langpred<-ptestimg %*% t(ccamat)
+colnames(langpred)<-paste("GM",c(1:ncol(langpred)),sep='')
+cogpred<-langmat2 %*% data.matrix( langresult$eig2 )
+mydf<-data.frame( cogpred, langpred )
+print(cor.test( mydf$Variate001 ,predict(mdltrain,newdata=mydf)))
+for ( i in 1:length(labels) )
+  print( paste( "Dice: ",aal$label_name[labels[i]],
+         sum( abs(ccamat[i,]) > 0 & initmat[i,] > 0 ) /
+         sum( abs(ccamat[i,]) > 0 | initmat[i,] > 0 ) ) )
+for ( x in langresult$eig1 ) {
+  ImageMath(3,x,"abs",x)
+  ImageMath(3,x,"Normalize",x)
+  print(paste(max(x),min(x)))
+}
+mycolors<-c("red","green","blue","yellow")
+langfn<-paste(rootdir,'/figures/langSCCANRegression.jpg',sep='')
+plotANTsImage( mask, functional=langresult$eig1, threshold='0.25x1',
+  slices="12x50x1",color=mycolors,outname=ofn )
+```
+
+![](`r langfn`)
 
 ## Sparse regression with nuisance variables
 
