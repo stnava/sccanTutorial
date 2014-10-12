@@ -83,8 +83,8 @@ for ( sp in paramsearch ) {
   }
 mydf<-data.frame( sparseness=paramsearch, trainCorrs=paramsearchcorrs, 
   testCorrs=paramsearchpreds )
-mdl1<-lm( trainCorrs ~ stats::poly(sparseness,1), data=mydf ) 
-mdl2<-lm( testCorrs ~ stats::poly(sparseness,1) , data=mydf ) 
+mdl1<-lm( trainCorrs ~ stats::poly(sparseness,4), data=mydf ) 
+mdl2<-lm( testCorrs ~ stats::poly(sparseness,4) , data=mydf ) 
 visreg(mdl1)
 visreg(mdl2)
 ```
