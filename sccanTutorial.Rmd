@@ -1,8 +1,9 @@
 ---
 title: "SCCAN tutorial and tests"
+bibliography: REFERENCES.bib
 output: pdf_document
 ---
-```{r global options, include=FALSE,echo=TRUE}
+```{r global options, include=FALSE,echo=TRUE, message=FALSE, warning=FALSE}
 library( knitr )
 library( randomForest )
 library( visreg )
@@ -30,15 +31,20 @@ SCCAN uses high-dimensional regularization methods common in $\ell_1$ regression
 and spatial regularization to help ensure the biological plausibility of statistical
 maps in medical imaging.  This problem is a difficult optimization ($np$-hard)
 and, to improve solution interpetability and stability, SCCAN allows one to
-to use prior knowledge to constrain the solution space.
+to use prior knowledge to constrain the solution space.  This tutorial is based
+on dimensionality reduction ideas outlined in the
+Eigenanatomy (@Dhillon2014) and SCCAN (@Avants2014) papers.
 
 # Examples
 
 Perhaps the best way to understand how to use SCCAN is by running example data.
+The example data below consists of measurements from cortical gray matter and
+measurements from a diverse cognitive battery, the Philadelphia Brief Assessment
+of Cognition.
 
 ## Read example data
 We read in some neuroimaging and cognitive data below.
-```{r readata,fig.width=8, fig.height=4, echo=TRUE, messages=FALSE }
+```{r readata,fig.width=8, fig.height=4, echo=TRUE, message=FALSE, warning=FALSE }
 data(aal,package='ANTsR')
 gfnl<-list.files(path=rootdir, pattern = glob2rx("pbac*mha"),
   full.names = T,recursive = T)
@@ -62,11 +68,14 @@ one for training.
 
 ## Sparse regression
 
-Use sccan to find brain regions relating to age.  We impose a "cluster
+Use SCCAN to find brain regions relating to age.  In this case, sparse CCA
+acts like a sparse regression.  We impose a "cluster
 threshold" regularization to prevent isolated voxels from appearing in
 the solution.  We will also compare the results in training with that
-in testing as a function of spareseness.
-```{r sparreg,fig.width=8, fig.height=4, echo=TRUE, messages=FALSE }
+in testing as a function of spareseness.  This type of approach can
+be useful in parameter selection i.e. in choosing the optimization
+criterion based on training data.
+```{r sparreg,fig.width=8, fig.height=4, echo=TRUE, message=FALSE, warning=FALSE}
 agemat<-matrix( ptraincog$age, ncol=1)
 paramsearch<-c(1:10)/(-100.0)
 paramsearchcorrs<-rep(0,length(paramsearch))
@@ -93,10 +102,12 @@ visreg(mdl2)
 
 ## SCCAN with prior initialization
 
-Use SCCAN to find brain regions relating to language.
-We initialize with left hemisphere regions.
-
-```{r sparreginit,fig.width=8, fig.height=4, echo=TRUE, messages=FALSE }
+Use SCCAN to find brain regions relating to a battery of tests
+that measure language-related cognitive function.
+We initialize SCCAN with left hemisphere regions.  In this case,
+the initialization controls the sparseness parameters for each
+eigenvector.
+```{r sparreginit,fig.width=8, fig.height=4, echo=TRUE, message=FALSE, warning=FALSE}
 langmat<-cbind(  ptraincog$speech_adj, ptraincog$writing_adj,
                  ptraincog$semantic_adj, ptraincog$reading_adj,
                  ptraincog$naming_adj )
@@ -111,8 +122,7 @@ initmat<-matrix( rep(0,sum(mask==1)*length(labels)), nrow=length(labels) )
 # fill the matrix with the aal region locations
 for ( i in 1:length(labels) ) {
   vec<-( aalimg[ mask == 1 ] == labels[i] )
-  vec[ vec > 0]<-vec[ vec > 0]+rnorm(sum(vec>0))*0.01
-  initmat[i,]<-vec
+  initmat[i,]<-as.numeric( vec )
 }
 ccainit<-initializeEigenanatomy( initmat, mask )
 pwsearch<-c(50,25,10)
@@ -162,19 +172,19 @@ par3d(userMatrix = id )
 ct<-ct+1
 }
 ```
-Strong prior
+Strong use of prior
 
 ![Strong prior](`r langfn[1]`)
 
 ![Strong prior 3D](`r langfn2[1]`)
 
-Medium prior
+Medium use of prior
 
 ![Medium prior](`r langfn[2]`)
 
 ![Medium prior 3D](`r langfn2[2]`)
 
-Weak prior
+Weak use of prior
 
 ![Weak prior](`r langfn[3]`)
 
@@ -184,10 +194,10 @@ Weak prior
 
 The best results are initialized by the prior but, in the end,
 drift away from that initialization.  Where in the brain do the solution
-vectors end up?
+vectors end up?  We write a quick function to answer this question.
 
 
-```{r aallabel}
+```{r aallabel, message=FALSE, warning=FALSE}
 reportAnatomy<-function( eigIn, maskIn, wt=0.3 )
   {
   data('aal',package='ANTsR')
@@ -213,15 +223,17 @@ How good were our original hypothetical regions as predictors?
 ## Associating classes to SCCAN predictors
 
 Recalling: CCA maximizes $PearsonCorrelation( XW^T, ZY^T )$,
-we can study matrix $Y$ which contrasts or combines columns of the cognition/design matrix.
+where $X$ and $Z$ are data matrices, we can study matrix $Y$ (or $W$)
+which contrasts or combines columns of the associated data matrix.
+In this example, $Y$ operates on the cognition/design matrix.
 
-```{r sccanpredictorclass}
+```{r sccanpredictorclass, message=FALSE, warning=FALSE}
 rownames(langresult$eig2)<-colnames(langmat)
 temp<-(langresult$eig2)
 temp[ abs(langresult$eig2) < 0.03 ]<-0
 ```
 
-```{r sccanpredictorclass2}
+```{r sccanpredictorclass2, message=FALSE, warning=FALSE}
 pheatmap(temp)
 ```
 
@@ -234,7 +246,7 @@ dimensionality reduction;  (2) orthogonalize the predictors.
 (3) Use alternative SCCAN formulations (e.g. set `mycoption` to 0 or 2).
 Let's try the first 2 choices as they are more traditional.
 
-```{r covar1, fig.width=8, fig.height=4, echo=TRUE, messages=FALSE }
+```{r covar1, fig.width=8, fig.height=4, echo=TRUE, message=FALSE, warning=FALSE}
 # 1. control for age and mmse after the dimensionality reduction
 langresult<-sparseDecom2( inmatrix=list(ptrainimg,langmat), its=15, mycoption=1,
   sparseness=c(sp,-0.9), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(50,0),
@@ -257,7 +269,7 @@ print(cor.test( mydf[,bestpred] ,predict(mdltrain,newdata=mydf)))
 ```
 
 Now, the second option.
-```{r covar2, fig.width=8, fig.height=4, echo=TRUE, messages=FALSE }
+```{r covar2, fig.width=8, fig.height=4, echo=TRUE, message=FALSE, warning=FALSE}
 # 2. orthogonalize the matrices against mmse and education
 rlangmat<-residuals(lm(langmat~ptraincog$mmse+ptraincog$age))
 rptrainimg<-residuals(lm(ptrainimg~ptraincog$mmse+ptraincog$age))
@@ -287,7 +299,7 @@ print(cor.test( mydf[,bestpred] ,predict(mdltrain,newdata=mydf)))
 Try to predict all the demographic variability from the imaging data.
 We use `mycoption 0` to try to reduce correlation in low-dimensional
 space.  This enforces a new SCCAN constraint (not previously reported).
-```{r fullpred, fig.width=8, fig.height=4, echo=TRUE, messages=FALSE }
+```{r fullpred, fig.width=8, fig.height=4, echo=TRUE, message=FALSE, warning=FALSE}
 nv<-11
 nfn<-rep("",nv)
 cognames<-rep("",nv)
@@ -295,14 +307,14 @@ cogmat<-data.matrix(ptraincog)
 rcogmat<-residuals( lm( data.matrix(ptraincog) ~ ptraincog$mmse + ptraincog$age ) )
 rptrainimg<-residuals( lm( ptrainimg ~ ptraincog$mmse ) )
 batt<-sparseDecom2( inmatrix=list(rptrainimg,rcogmat), its=15,
-  sparseness=c(0.02, -0.05), inmask=c(mask,NA), nvecs=nv, cthresh=c(100,0),
+  sparseness=c(0.015, -0.05), inmask=c(mask,NA), nvecs=nv, cthresh=c(250,0),
   smooth=0.0, ell1=-10, mycoption=1 )
 ccamat<-imageListToMatrix( batt$eig1, mask )
 gvars<-paste("GM",c(1:nrow(ccamat)),sep='',collapse='+')
 ```
 
 Now let's use our previously developed reporting capabilities.
-```{r fullreport, fig.width=8, fig.height=4, echo=TRUE, messages=FALSE }
+```{r fullreport, fig.width=8, fig.height=4, echo=TRUE, message=FALSE, warning=FALSE}
 render<-TRUE
 for ( bestpred in 1:nrow(ccamat)) {
   battpred<-ptrainimg %*% t(ccamat)
@@ -396,7 +408,7 @@ Anatomy related with `r cognames[11]`
 
 Can the neuroimaging data predict the full cognitive battery?
 
-```{r mvarpred,fig.width=8, fig.height=4, echo=TRUE, messages=FALSE }
+```{r mvarpred,fig.width=8, fig.height=4, echo=TRUE, message=FALSE, warning=FALSE}
 # use cca to transform cortical signal to the cognitive battery
 batt2<-sparseDecom2( inmatrix=list(rptrainimg,rcogmat), its=15,
   sparseness=c(0.02, -0.9), inmask=c(mask,NA), nvecs=nv, cthresh=c(100,0),
