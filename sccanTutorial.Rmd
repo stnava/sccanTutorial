@@ -104,7 +104,7 @@ colnames(langmat)<-c("speech","writing","semantic","reading","naming")
 langmat2<-cbind( ptestcog$speech_adj, ptestcog$writing_adj, 
                  ptestcog$semantic_adj, ptestcog$reading_adj,
                  ptestcog$naming_adj )
-# langmat<-residuals(lm(langmat~ptraincog$mmse+ptraincog$age))
+colnames(langmat2)<-colnames(langmat)
 labels<-c(13,81,39,79)
 print(aal$label_name[labels])
 initmat<-matrix( rep(0,sum(mask==1)*length(labels)), nrow=length(labels) )
@@ -120,21 +120,22 @@ langfn<-rep("",length(pwsearch))
 langfn2<-rep("",length(pwsearch))
 ct<-1
 for ( pw in pwsearch ) {
-langresult<-sparseDecom2( inmatrix=list(ptrainimg,langmat), its=6, mycoption=1,
-  sparseness=c(sp,-0.9), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(50,0), 
-  initializationList=ccainit$initlist, priorWeight=pw/100, smooth=0.5, ell1=-10 )
+langresult<-sparseDecom2( inmatrix=list(ptrainimg,langmat), its=15, mycoption=1,
+  sparseness=c(sp,-0.3), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(50,0), 
+  initializationList=ccainit$initlist, priorWeight=pw/100, smooth=0.0, ell1=-10 )
 ccamat<-imageListToMatrix( langresult$eig1, mask )
 langpred<-ptrainimg %*% t(ccamat)
 colnames(langpred)<-paste("GM",c(1:ncol(langpred)),sep='')
 cogpred<-langmat %*% data.matrix( langresult$eig2 )
+bestpred<-which.max(abs(diag(cor(langpred,cogpred))))
 mydf<-data.frame( cogpred, langpred )
-myform<-as.formula( "Variate000~GM1+GM2+GM3+GM4" )
+myform<-as.formula( paste("Variate00",bestpred-1,"~GM1+GM2+GM3+GM4",sep='') )
 mdltrain<-lm( myform, data=mydf )
 langpred<-ptestimg %*% t(ccamat)
 colnames(langpred)<-paste("GM",c(1:ncol(langpred)),sep='')
 cogpred<-langmat2 %*% data.matrix( langresult$eig2 )
 mydf<-data.frame( cogpred, langpred )
-print(cor.test( mydf$Variate000 ,predict(mdltrain,newdata=mydf)))
+print(cor.test( mydf[,bestpred] ,predict(mdltrain,newdata=mydf)))
 for ( i in 1:length(labels) )
   print( paste( "Dice: ",aal$label_name[labels[i]],
          sum( abs(ccamat[i,]) > 0 & initmat[i,] > 0 ) /
@@ -187,17 +188,22 @@ vectors end up?
 
 
 ```{r aallabel}
-ccaanat<-list()
-for ( img in langresult$eig1 ) {
-  nzind<-img[ mask == 1 ] > 0 
-  aalvals<-aalimg[ mask == 1 ][ nzind ]
-  ccaanat<-lappend( ccaanat, aalvals )
-}
-ccaanat<-unlist( ccaanat )
-anatcount<-hist(ccaanat,breaks=0:100)$count
-anatcount[ anatcount < 0.8*max(anatcount) ]<-0
-anatcount<-which( anatcount > 0 )
-ccaaal<-aal$label_name[anatcount]
+reportAnatomy<-function( eigIn, maskIn, wt=0.3 )
+  {
+  data('aal',package='ANTsR')
+  ccaanat<-list()
+  for ( img in eigIn ) {
+    nzind<-abs(img[ maskIn == 1 ]) > 0 
+    aalvals<-aalimg[ maskIn == 1 ][ nzind ]
+    ccaanat<-lappend( ccaanat, aalvals )
+  }
+  ccaanat<-unlist( ccaanat )
+  anatcount<-hist(ccaanat,breaks=0:100)$count
+  anatcount[ anatcount < wt*max(anatcount) ]<-0
+  anatcount<-which( anatcount > 0 )
+  return( toString(aal$label_name[anatcount] ) )
+  }
+ccaaal<-reportAnatomy( langresult$eig1 , mask )
 ```
 The SCCAN predictors include: `r ccaaal`.
 
@@ -224,18 +230,132 @@ pheatmap(temp)
 
 Often, we want to control for the presence of nuisance variables.
 As usual, there are several options:  (1) control after you do 
-dimensionality reduction;  (2) orthogonalize the predictors; 
-(3) FIXME ...
+dimensionality reduction;  (2) orthogonalize the predictors.
+(3) Use alternative SCCAN formulations (e.g. set `mycoption` to 0 or 2).
+Let's try the first 2 choices as they are more traditional.
+
+```{r covar1, fig.width=8, fig.height=4, echo=TRUE, messages=FALSE }
+# 1. control for age and mmse after the dimensionality reduction
+langresult<-sparseDecom2( inmatrix=list(ptrainimg,langmat), its=15, mycoption=1,
+  sparseness=c(sp,-0.3), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(50,0), 
+  initializationList=ccainit$initlist, priorWeight=pw/100, smooth=0.0, ell1=-10 )
+ccamat<-imageListToMatrix( langresult$eig1, mask )
+langpred<-ptrainimg %*% t(ccamat)
+colnames(langpred)<-paste("GM",c(1:ncol(langpred)),sep='')
+cogpred<-langmat %*% data.matrix( langresult$eig2 )
+bestpred<-which.max(abs(diag(cor(langpred,cogpred))))
+mydf<-data.frame( cogpred, langpred )
+myform<-as.formula( paste("Variate00",bestpred-1,"~GM1+GM2+GM3+GM4+ptraincog$mmse+ptraincog$age",sep='') )
+mdltrain<-lm( myform, data=mydf )
+print(summary(mdltrain))
+```
+
+Now, the second option.
+```{r covar1, fig.width=8, fig.height=4, echo=TRUE, messages=FALSE }
+# 2. orthogonalize the matrices against mmse and education
+rlangmat<-residuals(lm(langmat~ptraincog$mmse+ptraincog$age))
+rptrainimg<-residuals(lm(ptrainimg~ptraincog$mmse+ptraincog$age))
+langresult<-sparseDecom2( inmatrix=list(rptrainimg,rlangmat), its=15, mycoption=1,
+  sparseness=c(sp,-0.3), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(50,0), 
+  initializationList=ccainit$initlist, priorWeight=pw/100, smooth=0.0, ell1=-10 )
+ccamat<-imageListToMatrix( langresult$eig1, mask )
+langpred<-rptrainimg %*% t(ccamat)
+colnames(langpred)<-paste("GM",c(1:ncol(langpred)),sep='')
+cogpred<-rlangmat %*% data.matrix( langresult$eig2 )
+bestpred<-which.max(abs(diag(cor(langpred,cogpred))))
+mydf<-data.frame( cogpred, langpred )
+myform<-as.formula( paste("Variate00",bestpred-1,"~GM1+GM2+GM3+GM4",sep='') )
+mdltrain<-lm( myform, data=mydf )
+print(summary(mdltrain))
+# note: test data is not residualized
+langpred<-ptestimg %*% t(ccamat)
+colnames(langpred)<-paste("GM",c(1:ncol(langpred)),sep='')
+cogpred<-langmat2 %*% data.matrix( langresult$eig2 )
+mydf<-data.frame( cogpred, langpred )
+print(cor.test( mydf[,bestpred] ,predict(mdltrain,newdata=mydf)))
+myform<-as.formula( paste("Variate00",bestpred-1,
+  "~GM1+GM2+GM3+GM4+ptestcog$mmse+ptestcog$age",sep='') )
+mdltest<-lm( myform, data=mydf )
+print( summary( mdltest ) )
+```
 
 
 ## Predicting the full cognitive battery from the neuroimaging data
+
+Try to predict all the demographic variability from the imaging data. 
+We use `mycoption 0` to try to reduce correlation in low-dimensional 
+space.  This enforces a new SCCAN constraint (not previously reported).
+```{r fullpred, fig.width=8, fig.height=4, echo=TRUE, messages=FALSE }
+rcogmat<-residuals( lm( data.matrix(ptraincog) ~ ptraincog$mmse ) )
+rptrainimg<-residuals( lm( ptrainimg ~ ptraincog$mmse ) )
+batt<-sparseDecom2( inmatrix=list(rptrainimg,rcogmat), its=15, 
+  sparseness=c(0.01, -0.1), inmask=c(mask,NA), nvecs=10, cthresh=c(100,0),
+  smooth=0.5, ell1=-10, mycoption=1 )
+ccamat<-imageListToMatrix( batt$eig1, mask )
+gvars<-paste("GM",c(1:nrow(ccamat)),sep='',collapse='+')
+```
+
+Now let's use our previously developed reporting capabilities.
+```{r fullreport, fig.width=8, fig.height=4, echo=TRUE, messages=FALSE }
+render<-T
+for ( bestpred in 1:nrow(ccamat)) {
+  battpred<-ptrainimg %*% t(ccamat)
+  colnames(battpred)<-paste("GM",c(1:ncol(battpred)),sep='')
+  cogpred<-( cogmat %*% data.matrix( batt$eig2 ) )[,bestpred]
+  mydf<-data.frame( cogpred, battpred )
+  myform<-as.formula( paste("cogpred~",gvars,sep='') )
+  mdltrain<-lm( myform, data=mydf )
+  mdlinterp<-bigLMStats( mdltrain )
+  battpred<-ptestimg %*% t(ccamat)
+  colnames(battpred)<-paste("GM",c(1:ncol(battpred)),sep='')
+  cogpred<-(data.matrix(ptestcog) %*% data.matrix( batt$eig2 ))[,bestpred]
+  mydf<-data.frame( cogpred, battpred )
+  cat(paste("Eig",bestpred,"is related to:\n"))
+  cat( colnames(ptraincog)[ abs(batt$eig2[,bestpred]) > 0 ])
+  cat("\nwith weights\n")
+  cat( abs(batt$eig2[,bestpred])[ abs(batt$eig2[,bestpred]) > 0 ])
+  cat(paste("\nwith predictive correlation:",
+    cor( cogpred,predict(mdltrain,newdata=mydf))))
+  cat("\nAnatomy:")
+  for ( x in which.min(p.adjust(mdlinterp$beta.pval)) )  {
+    cat((reportAnatomy( list( batt$eig1[[x]]) , mask , 0.5 )))
+    if ( render ) {
+    vizimg<-antsImageClone( batt$eig1[[x]] )
+    ImageMath(3,vizimg,'abs',vizimg)
+    brain<-renderSurfaceFunction( surfimg =list( aalimg ) , alphasurf=0.1 ,
+      funcimg=list(vizimg), smoothsval = 1.5 )
+    id<-par3d("userMatrix")
+    rid<-rotate3d(  id , -pi/2, 1, 0, 0 )
+    rid2<-rotate3d( id ,  pi/2, 0, 0, 1 )
+    rid3<-rotate3d( id , -pi/2, 0, 0, 1 )
+    par3d(userMatrix = id ) 
+    dd<-make3ViewPNG(  rid, id, rid2, paste(rootdir,'/figures/battery',bestpred,sep='') )
+    par3d(userMatrix = id ) 
+    }
+    cat("\n")
+  }
+  cat("\n")
+}
+```
+
+
 
 Can the neuroimaging data predict the full cognitive battery?
 
 ```{r mvarpred,fig.width=8, fig.height=4, echo=TRUE, messages=FALSE }
 # use cca to transform cortical signal to the cognitive battery 
-predictedBattery<-data.frame( vox=ptrainimg %*% t(ccamat) %*% t(langresult$eig2) )
-print(cor(langmat,predictedBattery))
-predictedBattery<-data.frame( vox=ptestimg %*% t(ccamat) %*% t(langresult$eig2) )
-print(cor(langmat2,predictedBattery))
+predictedBattery<-data.frame( vox=ptrainimg %*% t(ccamat) %*% t(batt$eig2) )
+print(diag(cor(cogmat,predictedBattery)))
+predictedBattery<-data.frame( vox=ptestimg %*% t(ccamat) %*% t(batt$eig2) )
+print(diag(cor(data.matrix(ptestcog),predictedBattery)))
+qv<-rep(NA,ncol(ptestcog) )
+for ( i in 1:ncol(ptestcog) ) {
+ print(colnames(ptestcog)[i])
+ qv[i]<-cor.test(data.matrix(ptestcog)[,i],predictedBattery[,i])$p.value
+}
+qv[ is.na(qv) ]<-1
+qv<-p.adjust(pv,method='BH')
 ```
+
+The following univariate columns may be predicted 
+using SCCAN multivariate mapping: `r print( colnames(ptestcog)[ qv <= 0.05 ] )`.
