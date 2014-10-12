@@ -8,4 +8,5 @@ in R, do:
 ```
 library(rmarkdown)
 render( "sccanTutorial/sccanTutorial.Rmd" ,"pdf_document")
+render( "sccanTutorial/sccanTutorial.Rmd" ,"html_document")
 ```
