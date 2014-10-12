@@ -41,14 +41,14 @@ We read in some neuroimaging and cognitive data below.
 ```{r readata,fig.width=8, fig.height=4, echo=TRUE, messages=FALSE }
 data(aal,package='ANTsR')
 gfnl<-list.files(path=rootdir, pattern = glob2rx("pbac*mha"),
-  full.names = T,recursive = T) 
+  full.names = T,recursive = T)
 ptrainimg<-as.matrix(antsImageRead(gfnl[2],2))
 ptestimg<-as.matrix(antsImageRead(gfnl[1],2))
 gfnl<-list.files(path=rootdir, pattern = "gmask.nii.gz",
-  full.names = T,recursive = T) 
+  full.names = T,recursive = T)
 mask<-antsImageRead( gfnl[1], 3 )
 afnl<-list.files(path=rootdir, pattern = "aal.nii.gz",
-  full.names = T,recursive = T) 
+  full.names = T,recursive = T)
 aalimg<-antsImageRead( afnl[1], 3 )
 f1<-list.files(path =rootdir, pattern = "pbac_train_cog.csv",
   recursive=TRUE, full.names = TRUE, include.dirs=TRUE )
@@ -57,7 +57,7 @@ f2<-list.files(path = rootdir, pattern = "pbac_test_cog.csv",
 ptraincog<-read.csv(f1)
 ptestcog<-read.csv(f2)
 ```
-We already divided the dataset into two different groups - one for testing and 
+We already divided the dataset into two different groups - one for testing and
 one for training.  
 
 ## Sparse regression
@@ -83,10 +83,10 @@ for ( sp in paramsearch ) {
   paramsearchpreds[ct]<-cor( agepred[,1],  ptestcog$age )
   ct<-ct+1
   }
-mydf<-data.frame( sparseness=paramsearch, trainCorrs=paramsearchcorrs, 
+mydf<-data.frame( sparseness=paramsearch, trainCorrs=paramsearchcorrs,
   testCorrs=paramsearchpreds )
-mdl1<-lm( trainCorrs ~ stats::poly(sparseness,4), data=mydf ) 
-mdl2<-lm( testCorrs ~ stats::poly(sparseness,4) , data=mydf ) 
+mdl1<-lm( trainCorrs ~ stats::poly(sparseness,4), data=mydf )
+mdl2<-lm( testCorrs ~ stats::poly(sparseness,4) , data=mydf )
 visreg(mdl1)
 visreg(mdl2)
 ```
@@ -97,11 +97,11 @@ Use SCCAN to find brain regions relating to language.
 We initialize with left hemisphere regions.
 
 ```{r sparreginit,fig.width=8, fig.height=4, echo=TRUE, messages=FALSE }
-langmat<-cbind(  ptraincog$speech_adj, ptraincog$writing_adj, 
+langmat<-cbind(  ptraincog$speech_adj, ptraincog$writing_adj,
                  ptraincog$semantic_adj, ptraincog$reading_adj,
                  ptraincog$naming_adj )
 colnames(langmat)<-c("speech","writing","semantic","reading","naming")
-langmat2<-cbind( ptestcog$speech_adj, ptestcog$writing_adj, 
+langmat2<-cbind( ptestcog$speech_adj, ptestcog$writing_adj,
                  ptestcog$semantic_adj, ptestcog$reading_adj,
                  ptestcog$naming_adj )
 colnames(langmat2)<-colnames(langmat)
@@ -121,7 +121,7 @@ langfn2<-rep("",length(pwsearch))
 ct<-1
 for ( pw in pwsearch ) {
 langresult<-sparseDecom2( inmatrix=list(ptrainimg,langmat), its=15, mycoption=1,
-  sparseness=c(sp,-0.3), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(50,0), 
+  sparseness=c(sp,-0.3), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(150,0),
   initializationList=ccainit$initlist, priorWeight=pw/100, smooth=0.0, ell1=-10 )
 ccamat<-imageListToMatrix( langresult$eig1, mask )
 langpred<-ptrainimg %*% t(ccamat)
@@ -151,14 +151,14 @@ plotANTsImage( mask, functional=(langresult$eig1), threshold='0.25x1',
   slices="12x50x1",color=mycolors,outname=langfn[ct] )
 # cnt<-getCentroids( ntwkimage, clustparam = 100 )
 brain<-renderSurfaceFunction( surfimg =list( aalimg ) , alphasurf=0.1 ,
-  funcimg=langresult$eig1, smoothsval = 1.5, mycol=mycolors )
+  funcimg=langresult$eig1, smoothsval=1.5, smoothfval=1.0, mycol=mycolors )
 id<-par3d("userMatrix")
 rid<-rotate3d( id , -pi/2, 1, 0, 0 )
 rid2<-rotate3d( id , pi/2, 0, 0, 1 )
 rid3<-rotate3d( id , -pi/2, 0, 0, 1 )
-par3d(userMatrix = id ) 
+par3d(userMatrix = id )
 dd<-make3ViewPNG(  rid, id, rid2, paste(rootdir,'/figures/langSCCANRegression',pw,sep='') )
-par3d(userMatrix = id ) 
+par3d(userMatrix = id )
 ct<-ct+1
 }
 ```
@@ -182,8 +182,8 @@ Weak prior
 
 ## Identifying the anatomical network
 
-The best results are initialized by the prior but, in the end, 
-drift away from that initialization.  Where in the brain do the solution 
+The best results are initialized by the prior but, in the end,
+drift away from that initialization.  Where in the brain do the solution
 vectors end up?
 
 
@@ -193,12 +193,12 @@ reportAnatomy<-function( eigIn, maskIn, wt=0.3 )
   data('aal',package='ANTsR')
   ccaanat<-list()
   for ( img in eigIn ) {
-    nzind<-abs(img[ maskIn == 1 ]) > 0 
+    nzind<-abs(img[ maskIn == 1 ]) > 0
     aalvals<-aalimg[ maskIn == 1 ][ nzind ]
     ccaanat<-lappend( ccaanat, aalvals )
   }
   ccaanat<-unlist( ccaanat )
-  anatcount<-hist(ccaanat,breaks=0:100)$count
+  anatcount<-hist(ccaanat,breaks=0:100, plot = F)$count
   anatcount[ anatcount < wt*max(anatcount) ]<-0
   anatcount<-which( anatcount > 0 )
   return( toString(aal$label_name[anatcount] ) )
@@ -212,7 +212,7 @@ How much of the known network do we actually find?
 
 ## Associating classes to SCCAN predictors
 
-Recalling: CCA maximizes $PearsonCorrelation( XW^T, ZY^T )$, 
+Recalling: CCA maximizes $PearsonCorrelation( XW^T, ZY^T )$,
 we can study matrix $Y$ which contrasts or combines columns of the cognition/design matrix.
 
 ```{r sccanpredictorclass}
@@ -229,7 +229,7 @@ pheatmap(temp)
 ## Sparse regression with nuisance variables
 
 Often, we want to control for the presence of nuisance variables.
-As usual, there are several options:  (1) control after you do 
+As usual, there are several options:  (1) control after you do
 dimensionality reduction;  (2) orthogonalize the predictors.
 (3) Use alternative SCCAN formulations (e.g. set `mycoption` to 0 or 2).
 Let's try the first 2 choices as they are more traditional.
@@ -237,7 +237,7 @@ Let's try the first 2 choices as they are more traditional.
 ```{r covar1, fig.width=8, fig.height=4, echo=TRUE, messages=FALSE }
 # 1. control for age and mmse after the dimensionality reduction
 langresult<-sparseDecom2( inmatrix=list(ptrainimg,langmat), its=15, mycoption=1,
-  sparseness=c(sp,-0.3), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(50,0), 
+  sparseness=c(sp,-0.3), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(50,0),
   initializationList=ccainit$initlist, priorWeight=pw/100, smooth=0.0, ell1=-10 )
 ccamat<-imageListToMatrix( langresult$eig1, mask )
 langpred<-ptrainimg %*% t(ccamat)
@@ -256,7 +256,7 @@ Now, the second option.
 rlangmat<-residuals(lm(langmat~ptraincog$mmse+ptraincog$age))
 rptrainimg<-residuals(lm(ptrainimg~ptraincog$mmse+ptraincog$age))
 langresult<-sparseDecom2( inmatrix=list(rptrainimg,rlangmat), its=15, mycoption=1,
-  sparseness=c(sp,-0.3), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(50,0), 
+  sparseness=c(sp,-0.3), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(50,0),
   initializationList=ccainit$initlist, priorWeight=pw/100, smooth=0.0, ell1=-10 )
 ccamat<-imageListToMatrix( langresult$eig1, mask )
 langpred<-rptrainimg %*% t(ccamat)
@@ -282,23 +282,25 @@ print( summary( mdltest ) )
 
 ## Predicting the full cognitive battery from the neuroimaging data
 
-Try to predict all the demographic variability from the imaging data. 
-We use `mycoption 0` to try to reduce correlation in low-dimensional 
+Try to predict all the demographic variability from the imaging data.
+We use `mycoption 0` to try to reduce correlation in low-dimensional
 space.  This enforces a new SCCAN constraint (not previously reported).
 ```{r fullpred, fig.width=8, fig.height=4, echo=TRUE, messages=FALSE }
+nv<-11
+nfn<-rep("",nv)
 cogmat<-data.matrix(ptraincog)
 rcogmat<-residuals( lm( data.matrix(ptraincog) ~ ptraincog$mmse + ptraincog$age ) )
 rptrainimg<-residuals( lm( ptrainimg ~ ptraincog$mmse ) )
-batt<-sparseDecom2( inmatrix=list(rptrainimg,rcogmat), its=15, 
-  sparseness=c(0.01, -0.1), inmask=c(mask,NA), nvecs=10, cthresh=c(100,0),
-  smooth=0.5, ell1=-10, mycoption=1 )
+batt<-sparseDecom2( inmatrix=list(rptrainimg,rcogmat), its=15,
+  sparseness=c(0.01, -0.1), inmask=c(mask,NA), nvecs=nv, cthresh=c(100,0),
+  smooth=0.5, ell1=-10, mycoption=0 )
 ccamat<-imageListToMatrix( batt$eig1, mask )
 gvars<-paste("GM",c(1:nrow(ccamat)),sep='',collapse='+')
 ```
 
 Now let's use our previously developed reporting capabilities.
 ```{r fullreport, fig.width=8, fig.height=4, echo=TRUE, messages=FALSE }
-render<-T
+render<-TRUE
 for ( bestpred in 1:nrow(ccamat)) {
   battpred<-ptrainimg %*% t(ccamat)
   colnames(battpred)<-paste("GM",c(1:ncol(battpred)),sep='')
@@ -329,9 +331,11 @@ for ( bestpred in 1:nrow(ccamat)) {
     rid<-rotate3d(  id , -pi/2, 1, 0, 0 )
     rid2<-rotate3d( id ,  pi/2, 0, 0, 1 )
     rid3<-rotate3d( id , -pi/2, 0, 0, 1 )
-    par3d(userMatrix = id ) 
-    dd<-make3ViewPNG(  rid, id, rid2, paste(rootdir,'/figures/battery',bestpred,sep='') )
-    par3d(userMatrix = id ) 
+    par3d(userMatrix = id )
+    ofn<-paste(rootdir,'/figures/battery',bestpred,sep='')
+    nfn[ bestpred ]<-ofn
+    dd<-make3ViewPNG(  rid, id, rid2, ofn )
+    par3d(userMatrix = id )
     }
     cat("\n")
   }
@@ -339,12 +343,33 @@ for ( bestpred in 1:nrow(ccamat)) {
 }
 ```
 
+![Select results](`r nfn[1]`)
+
+![Select results](`r nfn[2]`)
+
+![Select results](`r nfn[3]`)
+
+![Select results](`r nfn[4]`)
+
+![Select results](`r nfn[5]`)
+
+![Select results](`r nfn[6]`)
+
+![Select results](`r nfn[7]`)
+
+![Select results](`r nfn[8]`)
+
+![Select results](`r nfn[9]`)
+
+![Select results](`r nfn[10]`)
+
+![Select results](`r nfn[11]`)
 
 
 Can the neuroimaging data predict the full cognitive battery?
 
 ```{r mvarpred,fig.width=8, fig.height=4, echo=TRUE, messages=FALSE }
-# use cca to transform cortical signal to the cognitive battery 
+# use cca to transform cortical signal to the cognitive battery
 predictedBattery<-data.frame( vox=ptrainimg %*% t(ccamat) %*% t(batt$eig2) )
 print(diag(cor(cogmat,predictedBattery)))
 predictedBattery<-data.frame( vox=ptestimg %*% t(ccamat) %*% t(batt$eig2) )
@@ -358,5 +383,5 @@ qv[ is.na(qv) ]<-1
 qv<-p.adjust(qv,method='BH')
 ```
 
-The following univariate columns may be predicted 
+The following univariate columns may be predicted
 using SCCAN multivariate mapping: `r print( colnames(ptestcog)[ qv <= 0.05 ] )`.
