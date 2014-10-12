@@ -111,17 +111,17 @@ initmat<-matrix( rep(0,sum(mask==1)*length(labels)), nrow=length(labels) )
 # fill the matrix with the aal region locations
 for ( i in 1:length(labels) ) {
   vec<-( aalimg[ mask == 1 ] == labels[i] )
-  vec[ vec > 0]<-vec[ vec > 0]+rnorm(sum(vec>0))*0.5
+  vec[ vec > 0]<-vec[ vec > 0]+rnorm(sum(vec>0))*0.01
   initmat[i,]<-vec
 }
 ccainit<-initializeEigenanatomy( initmat, mask )
-pwsearch<-c(40,20,10)
+pwsearch<-c(50,25,10)
 langfn<-rep("",length(pwsearch))
 langfn2<-rep("",length(pwsearch))
 ct<-1
 for ( pw in pwsearch ) {
 langresult<-sparseDecom2( inmatrix=list(ptrainimg,langmat), its=15, mycoption=1,
-  sparseness=c(sp,-0.3), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(150,0),
+  sparseness=c(sp,-0.3), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(125,0),
   initializationList=ccainit$initlist, priorWeight=pw/100, smooth=0.0, ell1=-10 )
 ccamat<-imageListToMatrix( langresult$eig1, mask )
 langpred<-ptrainimg %*% t(ccamat)
@@ -151,7 +151,7 @@ plotANTsImage( mask, functional=(langresult$eig1), threshold='0.25x1',
   slices="12x50x1",color=mycolors,outname=langfn[ct] )
 # cnt<-getCentroids( ntwkimage, clustparam = 100 )
 brain<-renderSurfaceFunction( surfimg =list( aalimg ) , alphasurf=0.1 ,
-  funcimg=langresult$eig1, smoothsval=1.5, smoothfval=1.0, mycol=mycolors )
+  funcimg=langresult$eig1, smoothsval=1.5, smoothfval=0, mycol=mycolors )
 id<-par3d("userMatrix")
 rid<-rotate3d( id , -pi/2, 1, 0, 0 )
 rid2<-rotate3d( id , pi/2, 0, 0, 1 )
@@ -207,7 +207,7 @@ ccaaal<-reportAnatomy( langresult$eig1 , mask )
 ```
 The SCCAN predictors include: `r ccaaal`.
 
-How much of the known network do we actually find?
+How good were our original hypothetical regions as predictors?
 
 
 ## Associating classes to SCCAN predictors
@@ -237,17 +237,23 @@ Let's try the first 2 choices as they are more traditional.
 ```{r covar1, fig.width=8, fig.height=4, echo=TRUE, messages=FALSE }
 # 1. control for age and mmse after the dimensionality reduction
 langresult<-sparseDecom2( inmatrix=list(ptrainimg,langmat), its=15, mycoption=1,
-  sparseness=c(sp,-0.3), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(50,0),
+  sparseness=c(sp,-0.9), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(50,0),
   initializationList=ccainit$initlist, priorWeight=pw/100, smooth=0.0, ell1=-10 )
 ccamat<-imageListToMatrix( langresult$eig1, mask )
 langpred<-ptrainimg %*% t(ccamat)
 colnames(langpred)<-paste("GM",c(1:ncol(langpred)),sep='')
 cogpred<-langmat %*% data.matrix( langresult$eig2 )
 bestpred<-which.max(abs(diag(cor(langpred,cogpred))))
-mydf<-data.frame( cogpred, langpred )
-myform<-as.formula( paste("Variate00",bestpred-1,"~GM1+GM2+GM3+GM4+ptraincog$mmse+ptraincog$age",sep='') )
+mydf<-data.frame( cogpred, langpred, mmse=ptraincog$mmse,age=ptraincog$age)
+myform<-as.formula( paste("Variate00",bestpred-1,
+  "~GM1+GM2+GM3+GM4+mmse+age",sep='') )
 mdltrain<-lm( myform, data=mydf )
 print(summary(mdltrain))
+langpred2<-ptestimg %*% t(ccamat)
+colnames(langpred2)<-paste("GM",c(1:ncol(langpred)),sep='')
+cogpred2<-langmat2 %*% data.matrix( langresult$eig2 )
+mydf<-data.frame( cogpred2, langpred2,mmse=ptestcog$mmse,age=ptestcog$age )
+print(cor.test( mydf[,bestpred] ,predict(mdltrain,newdata=mydf)))
 ```
 
 Now, the second option.
@@ -256,27 +262,23 @@ Now, the second option.
 rlangmat<-residuals(lm(langmat~ptraincog$mmse+ptraincog$age))
 rptrainimg<-residuals(lm(ptrainimg~ptraincog$mmse+ptraincog$age))
 langresult<-sparseDecom2( inmatrix=list(rptrainimg,rlangmat), its=15, mycoption=1,
-  sparseness=c(sp,-0.3), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(50,0),
+  sparseness=c(sp,-0.9), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(50,0),
   initializationList=ccainit$initlist, priorWeight=pw/100, smooth=0.0, ell1=-10 )
 ccamat<-imageListToMatrix( langresult$eig1, mask )
-langpred<-rptrainimg %*% t(ccamat)
+langpred<-ptrainimg %*% t(ccamat)
 colnames(langpred)<-paste("GM",c(1:ncol(langpred)),sep='')
-cogpred<-rlangmat %*% data.matrix( langresult$eig2 )
+cogpred<-langmat %*% data.matrix( langresult$eig2 )
 bestpred<-which.max(abs(diag(cor(langpred,cogpred))))
-mydf<-data.frame( cogpred, langpred )
-myform<-as.formula( paste("Variate00",bestpred-1,"~GM1+GM2+GM3+GM4",sep='') )
+mydf<-data.frame( cogpred, langpred, mmse=ptraincog$mmse,age=ptraincog$age)
+myform<-as.formula( paste("Variate00",bestpred-1,
+  "~GM1+GM2+GM3+GM4+mmse+age",sep='') )
 mdltrain<-lm( myform, data=mydf )
 print(summary(mdltrain))
-# note: test data is not residualized
-langpred<-ptestimg %*% t(ccamat)
-colnames(langpred)<-paste("GM",c(1:ncol(langpred)),sep='')
-cogpred<-langmat2 %*% data.matrix( langresult$eig2 )
-mydf<-data.frame( cogpred, langpred )
+langpred2<-ptestimg %*% t(ccamat)
+colnames(langpred2)<-paste("GM",c(1:ncol(langpred)),sep='')
+cogpred2<-langmat2 %*% data.matrix( langresult$eig2 )
+mydf<-data.frame( cogpred2, langpred2,mmse=ptestcog$mmse,age=ptestcog$age )
 print(cor.test( mydf[,bestpred] ,predict(mdltrain,newdata=mydf)))
-myform<-as.formula( paste("Variate00",bestpred-1,
-  "~GM1+GM2+GM3+GM4+ptestcog$mmse+ptestcog$age",sep='') )
-mdltest<-lm( myform, data=mydf )
-print( summary( mdltest ) )
 ```
 
 
@@ -288,12 +290,13 @@ space.  This enforces a new SCCAN constraint (not previously reported).
 ```{r fullpred, fig.width=8, fig.height=4, echo=TRUE, messages=FALSE }
 nv<-11
 nfn<-rep("",nv)
+cognames<-rep("",nv)
 cogmat<-data.matrix(ptraincog)
 rcogmat<-residuals( lm( data.matrix(ptraincog) ~ ptraincog$mmse + ptraincog$age ) )
 rptrainimg<-residuals( lm( ptrainimg ~ ptraincog$mmse ) )
 batt<-sparseDecom2( inmatrix=list(rptrainimg,rcogmat), its=15,
-  sparseness=c(0.01, -0.1), inmask=c(mask,NA), nvecs=nv, cthresh=c(100,0),
-  smooth=0.5, ell1=-10, mycoption=0 )
+  sparseness=c(0.02, -0.1), inmask=c(mask,NA), nvecs=nv, cthresh=c(100,0),
+  smooth=0.0, ell1=-10, mycoption=1 )
 ccamat<-imageListToMatrix( batt$eig1, mask )
 gvars<-paste("GM",c(1:nrow(ccamat)),sep='',collapse='+')
 ```
@@ -314,14 +317,16 @@ for ( bestpred in 1:nrow(ccamat)) {
   cogpred<-(data.matrix(ptestcog) %*% data.matrix( batt$eig2 ))[,bestpred]
   mydf<-data.frame( cogpred, battpred )
   cat(paste("Eig",bestpred,"is related to:\n"))
-  cat( colnames(ptraincog)[ abs(batt$eig2[,bestpred]) > 0 ])
+  mycog<-colnames(ptraincog)[ abs(batt$eig2[,bestpred]) > 0 ]
+  cat( mycog )
   cat("\nwith weights\n")
   cat( abs(batt$eig2[,bestpred])[ abs(batt$eig2[,bestpred]) > 0 ])
   cat(paste("\nwith predictive correlation:",
     cor( cogpred,predict(mdltrain,newdata=mydf))))
   cat("\nAnatomy:")
   for ( x in which.min(p.adjust(mdlinterp$beta.pval)) )  {
-    cat((reportAnatomy( list( batt$eig1[[x]]) , mask , 0.5 )))
+    myanat<-reportAnatomy( list( batt$eig1[[x]]) , mask , 0.5 )
+    cat(myanat)
     if ( render ) {
     vizimg<-antsImageClone( batt$eig1[[x]] )
     ImageMath(3,vizimg,'abs',vizimg)
@@ -333,7 +338,8 @@ for ( bestpred in 1:nrow(ccamat)) {
     rid3<-rotate3d( id , -pi/2, 0, 0, 1 )
     par3d(userMatrix = id )
     ofn<-paste(rootdir,'/figures/battery',bestpred,sep='')
-    nfn[ bestpred ]<-ofn
+    nfn[ bestpred ]<-paste(ofn,'.png',sep='')
+    cognames[ bestpred ]<-paste(mycog,collapse='+')
     dd<-make3ViewPNG(  rid, id, rid2, ofn )
     par3d(userMatrix = id )
     }
@@ -343,25 +349,47 @@ for ( bestpred in 1:nrow(ccamat)) {
 }
 ```
 
+Anatomy related with `r cognames[1]`
+
 ![Select results](`r nfn[1]`)
+
+Anatomy related with `r cognames[2]`
 
 ![Select results](`r nfn[2]`)
 
+Anatomy related with `r cognames[3]`
+
 ![Select results](`r nfn[3]`)
+
+Anatomy related with `r cognames[4]`
 
 ![Select results](`r nfn[4]`)
 
+Anatomy related with `r cognames[5]`
+
 ![Select results](`r nfn[5]`)
+
+Anatomy related with `r cognames[6]`
 
 ![Select results](`r nfn[6]`)
 
+Anatomy related with `r cognames[7]`
+
 ![Select results](`r nfn[7]`)
+
+Anatomy related with `r cognames[8]`
 
 ![Select results](`r nfn[8]`)
 
+Anatomy related with `r cognames[9]`
+
 ![Select results](`r nfn[9]`)
 
+Anatomy related with `r cognames[10]`
+
 ![Select results](`r nfn[10]`)
+
+Anatomy related with `r cognames[11]`
 
 ![Select results](`r nfn[11]`)
 
@@ -381,6 +409,5 @@ for ( i in 1:ncol(ptestcog) ) {
 qv[ is.na(qv) ]<-1
 qv<-p.adjust(qv,method='BH')
 ```
-
 The following univariate columns may be predicted
-using SCCAN multivariate mapping: `r print( colnames(ptestcog)[ qv <= 0.05 ] )`.
+using SCCAN multivariate mapping: `r colnames(ptestcog)[ qv <= 0.05 ] `.
