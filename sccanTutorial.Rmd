@@ -295,7 +295,7 @@ cogmat<-data.matrix(ptraincog)
 rcogmat<-residuals( lm( data.matrix(ptraincog) ~ ptraincog$mmse + ptraincog$age ) )
 rptrainimg<-residuals( lm( ptrainimg ~ ptraincog$mmse ) )
 batt<-sparseDecom2( inmatrix=list(rptrainimg,rcogmat), its=15,
-  sparseness=c(0.02, -0.1), inmask=c(mask,NA), nvecs=nv, cthresh=c(100,0),
+  sparseness=c(0.02, -0.9), inmask=c(mask,NA), nvecs=nv, cthresh=c(100,0),
   smooth=0.0, ell1=-10, mycoption=1 )
 ccamat<-imageListToMatrix( batt$eig1, mask )
 gvars<-paste("GM",c(1:nrow(ccamat)),sep='',collapse='+')
