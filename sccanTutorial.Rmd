@@ -295,7 +295,7 @@ cogmat<-data.matrix(ptraincog)
 rcogmat<-residuals( lm( data.matrix(ptraincog) ~ ptraincog$mmse + ptraincog$age ) )
 rptrainimg<-residuals( lm( ptrainimg ~ ptraincog$mmse ) )
 batt<-sparseDecom2( inmatrix=list(rptrainimg,rcogmat), its=15,
-  sparseness=c(0.02, -0.9), inmask=c(mask,NA), nvecs=nv, cthresh=c(100,0),
+  sparseness=c(0.02, -0.05), inmask=c(mask,NA), nvecs=nv, cthresh=c(100,0),
   smooth=0.0, ell1=-10, mycoption=1 )
 ccamat<-imageListToMatrix( batt$eig1, mask )
 gvars<-paste("GM",c(1:nrow(ccamat)),sep='',collapse='+')
@@ -398,13 +398,24 @@ Can the neuroimaging data predict the full cognitive battery?
 
 ```{r mvarpred,fig.width=8, fig.height=4, echo=TRUE, messages=FALSE }
 # use cca to transform cortical signal to the cognitive battery
-predictedBattery<-data.frame( vox=ptrainimg %*% t(ccamat) %*% t(batt$eig2) )
+batt2<-sparseDecom2( inmatrix=list(rptrainimg,rcogmat), its=15,
+  sparseness=c(0.02, -0.9), inmask=c(mask,NA), nvecs=nv, cthresh=c(100,0),
+  smooth=0.0, ell1=-10, mycoption=1 )
+ccamat<-imageListToMatrix( batt2$eig1, mask )
+predictedBattery<-data.frame( vox=ptrainimg %*% t(ccamat) %*% t(batt2$eig2) )
 print(diag(cor(cogmat,predictedBattery)))
-predictedBattery<-data.frame( vox=ptestimg %*% t(ccamat) %*% t(batt$eig2) )
+predictedBattery<-data.frame( vox=ptestimg %*% t(ccamat) %*% t(batt2$eig2) )
 print(diag(cor(data.matrix(ptestcog),predictedBattery)))
 qv<-rep(NA,ncol(ptestcog) )
 for ( i in 1:ncol(ptestcog) ) {
  qv[i]<-cor.test(data.matrix(ptestcog)[,i],predictedBattery[,i])$p.value
+ ttl<-paste(  colnames(ptestcog)[i],
+      cor(data.matrix(ptestcog)[,i],predictedBattery[,i]) )
+ mdl<-data.frame( realCog=data.matrix(ptestcog)[,i],
+                  predCog=predictedBattery[,i] )
+ mylm<-lm( predCog ~ realCog , data=mdl )
+ visreg( mylm , main=ttl)
+ Sys.sleep(1)
 }
 qv[ is.na(qv) ]<-1
 qv<-p.adjust(qv,method='BH')
