@@ -131,7 +131,7 @@ langfn2<-rep("",length(pwsearch))
 ct<-1
 for ( pw in pwsearch ) {
 langresult<-sparseDecom2( inmatrix=list(ptrainimg,langmat), its=15, mycoption=1,
-  sparseness=c(sp,-0.3), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(125,0),
+  sparseness=c(sp,-0.5), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(100,0),
   initializationList=ccainit$initlist, priorWeight=pw/100, smooth=0.0, ell1=-10 )
 ccamat<-imageListToMatrix( langresult$eig1, mask )
 langpred<-ptrainimg %*% t(ccamat)
