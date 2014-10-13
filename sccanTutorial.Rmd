@@ -40,7 +40,10 @@ Eigenanatomy (@Dhillon2014) and SCCAN (@Avants2014) papers.
 Perhaps the best way to understand how to use SCCAN is by running example data.
 The example data below consists of measurements from cortical gray matter and
 measurements from a diverse cognitive battery, the Philadelphia Brief Assessment
-of Cognition.
+of Cognition.  The code and data below are at
+[https://github.com/stnava/sccanTutorial](https://github.com/stnava/sccanTutorial)
+and depend on [ANTsR commit](https://github.com/stnava/ANTsR/commit/2dc5060de3146401f261918172636be95584d2f6)
+or more recent.
 
 ## Read example data
 We read in some neuroimaging and cognitive data below.
