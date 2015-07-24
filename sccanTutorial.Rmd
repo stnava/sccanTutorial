@@ -97,8 +97,8 @@ for ( sp in paramsearch ) {
   }
 mydf<-data.frame( sparseness=paramsearch, trainCorrs=paramsearchcorrs,
   testCorrs=paramsearchpreds )
-mdl1<-lm( trainCorrs ~ stats::poly(sparseness,4), data=mydf )
-mdl2<-lm( testCorrs ~ stats::poly(sparseness,4) , data=mydf )
+mdl1<-lm( trainCorrs ~ sparseness+I(sparseness^2), data=mydf )
+mdl2<-lm( testCorrs ~ sparseness+I(sparseness^2), data=mydf )
 visreg(mdl1)
 visreg(mdl2)
 ```
@@ -109,7 +109,8 @@ Use SCCAN to find brain regions relating to a battery of tests
 that measure language-related cognitive function.
 We initialize SCCAN with left hemisphere regions.  In this case,
 the initialization controls the sparseness parameters for each
-eigenvector.
+eigenvector.  The parameter *sp* will be overridden by the priors,
+thereby enabling a "per eigenvector" sparseness value.
 ```{r sparreginit,fig.width=8, fig.height=4, echo=TRUE, message=FALSE, warning=FALSE}
 langmat<-cbind(  ptraincog$speech_adj, ptraincog$writing_adj,
                  ptraincog$semantic_adj, ptraincog$reading_adj,
@@ -160,8 +161,8 @@ for ( x in langresult$eig1 ) {
 mycolors<-c("red","green","blue","yellow")
 langfn[ct]<-paste(rootdir,'/figures/langSCCANRegression',pw,'.jpg',sep='')
 langfn2[ct]<-paste(rootdir,'/figures/langSCCANRegression',pw,'.png',sep='')
-plotANTsImage( mask, functional=(langresult$eig1), threshold='0.25x1',
-  slices="12x50x1",color=mycolors,outname=langfn[ct] )
+plot( mask, (langresult$eig1), color.overlay=mycolors,
+      outname=langfn[ct], axis=1 )
 # cnt<-getCentroids( ntwkimage, clustparam = 100 )
 brain<-renderSurfaceFunction( surfimg =list( aalimg ) , alphasurf=0.1 ,
   funcimg=langresult$eig1, smoothsval=1.5, smoothfval=0, mycol=mycolors )
@@ -343,8 +344,7 @@ for ( bestpred in 1:nrow(ccamat)) {
     myanat<-reportAnatomy( list( batt$eig1[[x]]) , mask , 0.5 )
     cat(myanat)
     if ( render ) {
-    vizimg<-antsImageClone( batt$eig1[[x]] )
-    ImageMath(3,vizimg,'abs',vizimg)
+    vizimg<-abs( antsImageClone( batt$eig1[[x]] ) )
     brain<-renderSurfaceFunction( surfimg =list( aalimg ) , alphasurf=0.1 ,
       funcimg=list(vizimg), smoothsval = 1.5 )
     id<-par3d("userMatrix")
@@ -414,8 +414,8 @@ Can the neuroimaging data predict the full cognitive battery?
 ```{r mvarpred,fig.width=8, fig.height=4, echo=TRUE, message=FALSE, warning=FALSE}
 # use cca to transform cortical signal to the cognitive battery
 batt2<-sparseDecom2( inmatrix=list(rptrainimg,rcogmat), its=15,
-  sparseness=c(0.02, -0.9), inmask=c(mask,NA), nvecs=nv, cthresh=c(100,0),
-  smooth=0.0, ell1=-10, mycoption=1 )
+  sparseness=c(0.02, -0.9), inmask=c(mask,NA), nvecs=nv,
+  cthresh=c(100,0), smooth=0.0, ell1=-10, mycoption=0 )
 ccamat<-imageListToMatrix( batt2$eig1, mask )
 predictedBattery<-data.frame( vox=ptrainimg %*% t(ccamat) %*% t(batt2$eig2) )
 print(diag(cor(cogmat,predictedBattery)))
@@ -434,6 +434,7 @@ for ( i in 1:ncol(ptestcog) ) {
 }
 qv[ is.na(qv) ]<-1
 qv<-p.adjust(qv,method='BH')
+sum(qv<0.05)/length(qv)
 ```
 The following univariate columns may be predicted
 using SCCAN multivariate mapping: `r colnames(ptestcog)[ qv <= 0.05 ] `.
