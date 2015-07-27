@@ -248,7 +248,7 @@ In this example, $Y$ operates on the cognition/design matrix.
 ```{r sccanpredictorclass, message=FALSE, warning=FALSE}
 rownames(langresult$eig2)<-colnames(langmat)
 temp<-(langresult$eig2)
-temp[ abs(langresult$eig2) < 0.03 ]<-0
+temp[ abs(langresult$eig2) < 0.0001 ]<-0
 ```
 
 ```{r sccanpredictorclass2, message=FALSE, warning=FALSE}
