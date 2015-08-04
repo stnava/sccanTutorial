@@ -10,15 +10,16 @@ library( visreg )
 library(pheatmap)
 library(png)
 invisible(suppressMessages(library(ANTsR)))
-rootdir<-"/Users/stnava/code/sccanTutorial"
+rootdir<-"./"
 if ( ! file.exists(rootdir) ) {
   dirs<-list.dirs(path = path.expand("~"), full.names = TRUE, recursive = TRUE)
   rootdir<-dirs[ grep('sccanTutorial',dirs)[1] ]
   rootdir<-path.expand(rootdir)
 }
 opts_knit$set(root.dir=rootdir)
-its=3
+its=10
 verb=0
+copt=1
 ```
 
 # Introduction
@@ -94,8 +95,8 @@ for ( sp in paramsearch ) {
   imats[2, order(imat[2,])[1:round(nvox*(1-abs(sp)))] ]=0
   initdf<-initializeEigenanatomy( imats, mask=mask )
   ageresult<-sparseDecom2( inmatrix=list(ptrainimg,agemat), its=its,
-    sparseness=c(sp,0.9), inmask=c(mask,NA),nvecs=2, mycoption=1,
-    cthresh=c(250,0), ell1=0.1,
+    sparseness=c(sp,0.9), inmask=c(mask,NA),nvecs=2, mycoption=copt,
+    cthresh=c(1000,0), ell1=0.1,
     smooth=0.5, verbose=verb ) # initializationList = initdf$initlist,
   sccanimg1=matrixToImages( t(ageresult$eig1), mask )[[1]]
   # validate in test data
@@ -146,9 +147,9 @@ langfn2<-rep("",length(pwsearch))
 ct<-1
 for ( pw in pwsearch ) {
 langresult<-sparseDecom2( inmatrix=list(ptrainimg,langmat), its=its,
-  mycoption=1,
-  sparseness=c(sp,-0.5), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(100,0), verbose=1,
-  initializationList=ccainit$initlist, priorWeight=pw/100, smooth=0.0,
+  mycoption=copt,
+  sparseness=c(sp,-0.5), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(1000,0), verbose=1,
+  initializationList=ccainit$initlist, priorWeight=pw/100, smooth=0.5,
   perms=0 )
 ccamat = langresult$eig1
 langpred<-ptrainimg %*% (ccamat)
@@ -267,9 +268,9 @@ Let's try the first 2 choices as they are more traditional.
 ```{r covar1, fig.width=8, fig.height=4, echo=TRUE, message=FALSE, warning=FALSE}
 # 1. control for age and mmse after the dimensionality reduction
 langresult<-sparseDecom2( inmatrix=list(ptrainimg,langmat), its=its,
-  mycoption=1,
-  sparseness=c(sp,-0.9), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(50,0),
-  initializationList=ccainit$initlist, priorWeight=pw/100, smooth=0.0 )
+  mycoption=copt,
+  sparseness=c(sp,-0.9), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(1000,0),
+  initializationList=ccainit$initlist, priorWeight=pw/100, smooth=0.5 )
 ccamat = langresult$eig1
 langpred<-ptrainimg %*% (ccamat)
 colnames(langpred)<-paste("GM",c(1:ncol(langpred)),sep='')
@@ -293,9 +294,9 @@ Now, the second option.
 rlangmat<-residuals(lm(langmat~ptraincog$mmse+ptraincog$age))
 rptrainimg<-residuals(lm(ptrainimg~ptraincog$mmse+ptraincog$age))
 langresult<-sparseDecom2( inmatrix=list(rptrainimg,rlangmat), its=its,
-  mycoption=1,
-  sparseness=c(sp,-0.9), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(50,0),
-  initializationList=ccainit$initlist, priorWeight=pw/100, smooth=0.0 )
+  mycoption=copt,
+  sparseness=c(sp,-0.9), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(1000,0),
+  initializationList=ccainit$initlist, priorWeight=pw/100, smooth=0.5 )
 ccamat = langresult$eig1
 langpred<-ptrainimg %*% (ccamat)
 colnames(langpred)<-paste("GM",c(1:ncol(langpred)),sep='')
@@ -327,8 +328,8 @@ cogmat<-data.matrix(ptraincog)
 rcogmat<-residuals( lm( data.matrix(ptraincog) ~ ptraincog$mmse + ptraincog$age ) )
 rptrainimg<-residuals( lm( ptrainimg ~ ptraincog$mmse ) )
 batt<-sparseDecom2( inmatrix=list(rptrainimg,rcogmat), its=its,
-  sparseness=c(0.015, -0.05), inmask=c(mask,NA), nvecs=nv, cthresh=c(50,0),
-  smooth=0.25, mycoption=1 )
+  sparseness=c(0.015, -0.05), inmask=c(mask,NA), nvecs=nv,
+  cthresh=c(1000,0), smooth=0.5, mycoption=copt )
 ccamat = batt$eig1
 gvars<-paste("GM",c(1:ncol(ccamat)),sep='',collapse='+')
 ```
@@ -341,14 +342,14 @@ for ( bestpred in 1:ncol(ccamat)) {
   battpred<-ptrainimg %*% (ccamat)
   colnames(battpred)<-paste("GM",c(1:ncol(battpred)),sep='')
   cogpred<-( rcogmat %*% data.matrix( batt$eig2 ) )[,bestpred]
-  mydf<-data.frame( cogpred, battpred )
-  myform<-as.formula( paste("cogpred~",gvars,sep='') )
+  mydf<-data.frame( cogpred, battpred, age=ptraincog$age, mmse=ptraincog$mmse )
+  myform<-as.formula( paste("cogpred~",gvars,'+age+mmse',sep='') )
   mdltrain<-lm( myform, data=mydf )
   mdlinterp<-bigLMStats( mdltrain )
   battpred<-ptestimg %*% (ccamat)
   colnames(battpred)<-paste("GM",c(1:ncol(battpred)),sep='')
   cogpred<-(data.matrix(ptestcog) %*% data.matrix( batt$eig2 ))[,bestpred]
-  mydf<-data.frame( cogpred, battpred )
+  mydf<-data.frame( cogpred, battpred, age=ptestcog$age, mmse=ptestcog$mmse  )
   cat(paste("Eig",bestpred,"is related to:\n"))
   mycog<-colnames(ptraincog)[ abs(batt$eig2[,bestpred]) > 0 ]
   cat( mycog )
@@ -432,7 +433,7 @@ Can the neuroimaging data predict the full cognitive battery?
 # use cca to transform cortical signal to the cognitive battery
 batt2<-sparseDecom2( inmatrix=list(rptrainimg,rcogmat), its=its,
   sparseness=c(0.02, -0.9), inmask=c(mask,NA), nvecs=nv,
-  cthresh=c(100,0), smooth=0.0, mycoption=0 )
+  cthresh=c(1000,0), smooth=0.5, mycoption=copt )
 ccamat = batt2$eig1
 predictedBattery<-data.frame( vox=ptrainimg %*% (ccamat) %*% t(batt2$eig2) )
 print(diag(cor(cogmat,predictedBattery)))
