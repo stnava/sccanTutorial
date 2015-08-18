@@ -17,9 +17,10 @@ if ( ! file.exists(rootdir) ) {
   rootdir<-path.expand(rootdir)
 }
 opts_knit$set(root.dir=rootdir)
-its=10
-verb=0
-copt=1
+its=10 # could go up to 20 or 40
+verb=0 # verbosity
+copt=0 # 0 for most applications, 1 for priors
+smth=0 # set to 0.5 to help avoid overfitting
 ```
 
 # Introduction
@@ -83,7 +84,7 @@ be useful in parameter selection i.e. in choosing the optimization
 criterion based on training data.
 ```{r sparreg,fig.width=8, fig.height=4, echo=TRUE, message=FALSE, warning=FALSE}
 agemat<-matrix( ptraincog$age, ncol=1)
-paramsearch<-c(1:10)/(-100.0)*0.02
+paramsearch<-c(1:10)/(100.0)
 paramsearchcorrs<-rep(0,length(paramsearch))
 paramsearchpreds<-rep(0,length(paramsearch))
 ct<-1
@@ -97,10 +98,10 @@ for ( sp in paramsearch ) {
   ageresult<-sparseDecom2( inmatrix=list(ptrainimg,agemat), its=its,
     sparseness=c(sp,0.9), inmask=c(mask,NA),nvecs=2, mycoption=copt,
     cthresh=c(1000,0), ell1=0.1,
-    smooth=0.5, verbose=verb ) # initializationList = initdf$initlist,
+    smooth=smth, verbose=verb ) # initializationList = initdf$initlist,
   sccanimg1=matrixToImages( t(ageresult$eig1), mask )[[1]]
   # validate in test data
-  agepred<-ptrainimg %*% ageresult$eig1
+  agepred<-ptrainimg %*% (ageresult$eig1)
   paramsearchcorrs[ct]<-abs( cor( agepred[,1],  ptraincog$age ) )
   agepred<-ptestimg %*% ageresult$eig1
   paramsearchpreds[ct]<-abs( cor( agepred[,1],  ptestcog$age ) )
@@ -149,7 +150,7 @@ for ( pw in pwsearch ) {
 langresult<-sparseDecom2( inmatrix=list(ptrainimg,langmat), its=its,
   mycoption=copt,
   sparseness=c(sp,-0.5), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(1000,0), verbose=1,
-  initializationList=ccainit$initlist, priorWeight=pw/100, smooth=0.5,
+  initializationList=ccainit$initlist, priorWeight=pw/100, smooth=smth,
   perms=0 )
 ccamat = langresult$eig1
 langpred<-ptrainimg %*% (ccamat)
@@ -270,7 +271,7 @@ Let's try the first 2 choices as they are more traditional.
 langresult<-sparseDecom2( inmatrix=list(ptrainimg,langmat), its=its,
   mycoption=copt,
   sparseness=c(sp,-0.9), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(1000,0),
-  initializationList=ccainit$initlist, priorWeight=pw/100, smooth=0.5 )
+  initializationList=ccainit$initlist, priorWeight=pw/100, smooth=smth )
 ccamat = langresult$eig1
 langpred<-ptrainimg %*% (ccamat)
 colnames(langpred)<-paste("GM",c(1:ncol(langpred)),sep='')
@@ -296,7 +297,7 @@ rptrainimg<-residuals(lm(ptrainimg~ptraincog$mmse+ptraincog$age))
 langresult<-sparseDecom2( inmatrix=list(rptrainimg,rlangmat), its=its,
   mycoption=copt,
   sparseness=c(sp,-0.9), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(1000,0),
-  initializationList=ccainit$initlist, priorWeight=pw/100, smooth=0.5 )
+  initializationList=ccainit$initlist, priorWeight=pw/100, smooth=smth )
 ccamat = langresult$eig1
 langpred<-ptrainimg %*% (ccamat)
 colnames(langpred)<-paste("GM",c(1:ncol(langpred)),sep='')
@@ -329,7 +330,7 @@ rcogmat<-residuals( lm( data.matrix(ptraincog) ~ ptraincog$mmse + ptraincog$age 
 rptrainimg<-residuals( lm( ptrainimg ~ ptraincog$mmse ) )
 batt<-sparseDecom2( inmatrix=list(rptrainimg,rcogmat), its=its,
   sparseness=c(0.015, -0.05), inmask=c(mask,NA), nvecs=nv,
-  cthresh=c(1000,0), smooth=0.5, mycoption=copt )
+  cthresh=c(1000,0), smooth=smth, mycoption=copt )
 ccamat = batt$eig1
 gvars<-paste("GM",c(1:ncol(ccamat)),sep='',collapse='+')
 ```
@@ -433,7 +434,7 @@ Can the neuroimaging data predict the full cognitive battery?
 # use cca to transform cortical signal to the cognitive battery
 batt2<-sparseDecom2( inmatrix=list(rptrainimg,rcogmat), its=its,
   sparseness=c(0.02, -0.9), inmask=c(mask,NA), nvecs=nv,
-  cthresh=c(1000,0), smooth=0.5, mycoption=copt )
+  cthresh=c(1000,0), smooth=smth, mycoption=copt )
 ccamat = batt2$eig1
 predictedBattery<-data.frame( vox=ptrainimg %*% (ccamat) %*% t(batt2$eig2) )
 print(diag(cor(cogmat,predictedBattery)))
