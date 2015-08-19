@@ -142,16 +142,17 @@ for ( i in 1:length(labels) ) {
   initmat[i,]<-as.numeric( vec )
 }
 ccainit<-initializeEigenanatomy( initmat, mask )
-pwsearch<-c(50,25,10)
+pwsearch<-c(90,80,50)
 langfn<-rep("",length(pwsearch))
 langfn2<-rep("",length(pwsearch))
 ct<-1
 for ( pw in pwsearch ) {
 langresult<-sparseDecom2( inmatrix=list(ptrainimg,langmat), its=its,
-  mycoption=copt,
-  sparseness=c(sp,-0.5), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(1000,0), verbose=1,
-  initializationList=ccainit$initlist, priorWeight=pw/100, smooth=smth,
-  perms=0 )
+     mycoption=copt,
+     sparseness=c(0.1,-0.5), inmask=c(mask,NA),nvecs=length(labels),
+     cthresh=c(1000,0), verbose=verb,
+     initializationList=ccainit$initlist, priorWeight=pw/100, smooth=0,
+     perms=0 )
 ccamat = langresult$eig1
 langpred<-ptrainimg %*% (ccamat)
 colnames(langpred)<-paste("GM",c(1:ncol(langpred)),sep='')
