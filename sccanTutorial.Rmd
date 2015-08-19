@@ -16,6 +16,7 @@ if ( ! file.exists(rootdir) ) {
   rootdir<-dirs[ grep('sccanTutorial',dirs)[1] ]
   rootdir<-path.expand(rootdir)
 }
+dir.create( paste( rootdir,"/figures/", sep='') )
 opts_knit$set(root.dir=rootdir)
 its=10 # could go up to 20 or 40
 verb=0 # verbosity
