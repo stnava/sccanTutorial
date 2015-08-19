@@ -4,6 +4,7 @@ bibliography: REFERENCES.bib
 output: pdf_document
 ---
 ```{r global options, include=FALSE,echo=TRUE, message=FALSE, warning=FALSE}
+options(rgl.useNULL=TRUE)
 library( knitr )
 library( randomForest )
 library( visreg )
