@@ -4,7 +4,7 @@ bibliography: REFERENCES.bib
 output: pdf_document
 ---
 ```{r global options, include=FALSE,echo=TRUE, message=FALSE, warning=FALSE}
-options(rgl.useNULL=TRUE)
+# options(rgl.useNULL=TRUE)
 library( knitr )
 library( randomForest )
 library( visreg )
@@ -19,10 +19,10 @@ if ( ! file.exists(rootdir) ) {
 }
 dir.create( paste( rootdir,"/figures/", sep='') )
 opts_knit$set(root.dir=rootdir)
-its=10 # could go up to 20 or 40
+its=20 # could go up to 20 or 40
 verb=0 # verbosity
 copt=0 # 0 for most applications, 1 for priors
-smth=0 # set to 0.5 to help avoid overfitting
+smth=0.5 # set to 0.5 to help avoid overfitting
 ```
 
 # Introduction
@@ -97,9 +97,10 @@ for ( sp in paramsearch ) {
   imats[1, order(imat[1,])[1:round(nvox*(1-abs(sp)))] ]=0
   imats[2, order(imat[2,])[1:round(nvox*(1-abs(sp)))] ]=0
   initdf<-initializeEigenanatomy( imats, mask=mask )
-  ageresult<-sparseDecom2( inmatrix=list(ptrainimg,agemat), its=its,
-    sparseness=c(sp,0.9), inmask=c(mask,NA),nvecs=2, mycoption=copt,
-    cthresh=c(1000,0), ell1=0.1,
+  inmats = list( scale(ptrainimg), scale(agemat))
+  ageresult<-sparseDecom2( inmatrix=inmats, its=its,
+    sparseness=c(sp, 0.9), inmask=c(mask,NA),nvecs=2, mycoption=copt,
+    cthresh=c(1000,0), ell1=10,
     smooth=smth, verbose=verb ) # initializationList = initdf$initlist,
   sccanimg1=matrixToImages( t(ageresult$eig1), mask )[[1]]
   # validate in test data
@@ -144,15 +145,16 @@ for ( i in 1:length(labels) ) {
   initmat[i,]<-as.numeric( vec )
 }
 ccainit<-initializeEigenanatomy( initmat, mask )
-pwsearch<-c(90,80,50)
+pwsearch<-c(90,50,5)
 langfn<-rep("",length(pwsearch))
 langfn2<-rep("",length(pwsearch))
 ct<-1
 for ( pw in pwsearch ) {
-langresult<-sparseDecom2( inmatrix=list(ptrainimg,langmat), its=its,
+inmats=list( scale(ptrainimg), scale(langmat) )
+langresult<-sparseDecom2( inmatrix=inmats, its=its,
      mycoption=copt,
-     sparseness=c(0.1,-0.5), inmask=c(mask,NA),nvecs=length(labels),
-     cthresh=c(1000,0), verbose=verb,
+     sparseness=c( 0, -0.5), inmask=c(mask,NA),nvecs=length(labels),
+     cthresh=c(1000,0), verbose=1, ell1=10,
      initializationList=ccainit$initlist, priorWeight=pw/100, smooth=0,
      perms=0 )
 ccamat = langresult$eig1
@@ -271,7 +273,9 @@ Let's try the first 2 choices as they are more traditional.
 
 ```{r covar1, fig.width=8, fig.height=4, echo=TRUE, message=FALSE, warning=FALSE}
 # 1. control for age and mmse after the dimensionality reduction
-langresult<-sparseDecom2( inmatrix=list(ptrainimg,langmat), its=its,
+inmats=list(scale(ptrainimg),scale(langmat))
+sp=0.05
+langresult<-sparseDecom2( inmatrix=inmats, its=its,
   mycoption=copt,
   sparseness=c(sp,-0.9), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(1000,0),
   initializationList=ccainit$initlist, priorWeight=pw/100, smooth=smth )
@@ -297,7 +301,8 @@ Now, the second option.
 # 2. orthogonalize the matrices against mmse and education
 rlangmat<-residuals(lm(langmat~ptraincog$mmse+ptraincog$age))
 rptrainimg<-residuals(lm(ptrainimg~ptraincog$mmse+ptraincog$age))
-langresult<-sparseDecom2( inmatrix=list(rptrainimg,rlangmat), its=its,
+inmats=list( scale(rptrainimg), scale(rlangmat) )
+langresult<-sparseDecom2( inmatrix=inmats, its=its,
   mycoption=copt,
   sparseness=c(sp,-0.9), inmask=c(mask,NA),nvecs=length(labels), cthresh=c(1000,0),
   initializationList=ccainit$initlist, priorWeight=pw/100, smooth=smth )
@@ -331,8 +336,8 @@ cognames<-rep("",nv)
 cogmat<-data.matrix(ptraincog)
 rcogmat<-residuals( lm( data.matrix(ptraincog) ~ ptraincog$mmse + ptraincog$age ) )
 rptrainimg<-residuals( lm( ptrainimg ~ ptraincog$mmse ) )
-batt<-sparseDecom2( inmatrix=list(rptrainimg,rcogmat), its=its,
-  sparseness=c(0.015, -0.05), inmask=c(mask,NA), nvecs=nv,
+batt<-sparseDecom2( inmatrix=list(scale(rptrainimg),scale(rcogmat)), its=its,
+  sparseness=c(0.02, -0.05), inmask=c(mask,NA), nvecs=nv,
   cthresh=c(1000,0), smooth=smth, mycoption=copt )
 ccamat = batt$eig1
 gvars<-paste("GM",c(1:ncol(ccamat)),sep='',collapse='+')
@@ -435,8 +440,8 @@ Can the neuroimaging data predict the full cognitive battery?
 
 ```{r mvarpred,fig.width=8, fig.height=4, echo=TRUE, message=FALSE, warning=FALSE}
 # use cca to transform cortical signal to the cognitive battery
-batt2<-sparseDecom2( inmatrix=list(rptrainimg,rcogmat), its=its,
-  sparseness=c(0.02, -0.9), inmask=c(mask,NA), nvecs=nv,
+batt2<-sparseDecom2( inmatrix=list(scale(rptrainimg),scale(rcogmat)), its=its,
+  sparseness=c( 0.02, -0.9), inmask=c(mask,NA), nvecs=nv,
   cthresh=c(1000,0), smooth=smth, mycoption=copt )
 ccamat = batt2$eig1
 predictedBattery<-data.frame( vox=ptrainimg %*% (ccamat) %*% t(batt2$eig2) )
